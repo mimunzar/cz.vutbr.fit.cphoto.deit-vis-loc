@@ -1,0 +1,13 @@
+name: cz.cphoto.deit-vis-loc
+channels:
+  - defaults
+  - pytorch-lts
+dependencies:
+  - cudatoolkit=10.2
+  - pip
+  - python=3.6
+  - pytorch=1.8.2
+  - torchvision=0.9.2
+  - pip:
+    - timm==0.3.2
+
