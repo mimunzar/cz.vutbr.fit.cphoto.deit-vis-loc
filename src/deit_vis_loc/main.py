@@ -4,6 +4,7 @@ import os
 
 
 DATASET_PATH = '.git/datasets/GeoPose3K_v2/'
+BATCH_SIZE   = 100
 
 
 def read_paths_for_queries(dpath, name):
@@ -16,5 +17,17 @@ def read_paths_for_queries(dpath, name):
             'Failed to read queries paths ({} not found in {})'.format(name, queries_dpath))
 
 
-queries_paths = read_paths_for_queries(DATASET_PATH, 'train.txt')
+def partition(n, coll):
+    assert 0 < n
+    if not coll:
+        return []
+
+    part = coll[:n]
+    if len(part) == n:
+        return [part] + partition(n, coll[n:])
+    return [part]
+
+
+if __name__ == "__main__":
+    queries_paths = partition(BATCH_SIZE, read_paths_for_queries(DATASET_PATH, 'train.txt'))
 

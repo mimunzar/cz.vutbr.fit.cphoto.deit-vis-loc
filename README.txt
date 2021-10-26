@@ -11,8 +11,7 @@ Installation
 Usage
 ---------
 
-  python src/main.py
-
+  python src/deit_vis_loc/main.py
 
   .
   └── GeoPose3K_v2
@@ -22,6 +21,12 @@ Usage
       │   ├── train.txt
       │   └── val.txt
       └── query_segments_result
+
+
+Tests
+-----
+
+  python -m pytest
 
 
 References
