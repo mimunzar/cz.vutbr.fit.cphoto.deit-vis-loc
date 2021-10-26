@@ -18,6 +18,9 @@ Usage
   └── GeoPose3K_v2
       ├── database_segments
       ├── query_original_result
+      │   ├── test.txt
+      │   ├── train.txt
+      │   └── val.txt
       └── query_segments_result
 
 

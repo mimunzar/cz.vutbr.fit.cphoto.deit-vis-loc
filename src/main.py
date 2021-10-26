@@ -6,20 +6,15 @@ import os
 DATASET_PATH = '.git/datasets/GeoPose3K_v2/'
 
 
-def find_files(root, name):
-    return [os.path.join(dpath, name)
-        for dpath, _, filenames in os.walk(root) if name in filenames]
-
-
-def read_queries_paths(dpath):
+def read_paths_for_queries(dpath, name):
     queries_dpath = os.path.join(dpath, 'query_original_result')
-    spec_paths    = find_files(queries_dpath, 'train.txt')
-    if spec_paths:
-        with open(spec_paths[0]) as f:
+    spec_paths    = os.path.join(queries_dpath, name)
+    if os.path.exists(spec_paths):
+        with open(spec_paths) as f:
             return [os.path.join(queries_dpath, line.strip()) for line in f]
-    raise ValueError('Failed to read queries paths (train.txt not found in {})'.format(queries_dpath))
+    raise FileNotFoundError(
+            'Failed to read queries paths ({} not found in {})'.format(name, queries_dpath))
 
 
-queries_paths = read_queries_paths(DATASET_PATH)
-
+queries_paths = read_paths_for_queries(DATASET_PATH, 'train.txt')
 
