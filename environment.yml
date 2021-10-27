@@ -1,9 +1,10 @@
-name: cz.cphoto.deit-vis-loc
+name: cz.vutbr.fit.cphoto.deit-vis-loc
 channels:
   - defaults
   - pytorch-lts
 dependencies:
   - cudatoolkit=10.2
+  - matplotlib
   - pip
   - pytest
   - python=3.6

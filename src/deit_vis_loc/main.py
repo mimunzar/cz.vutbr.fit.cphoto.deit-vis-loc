@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 
-import timm
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import torch
-import torchvision
 import torchvision.transforms as T
 from PIL import Image
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import os
+from operator import itemgetter
 
 
 DATASET_PATH = '.git/datasets/GeoPose3K_v2/'
@@ -54,25 +55,48 @@ def gen_triplets(list_of_query_paths, fn_to_segment_path):
     return result
 
 
+def embeddings(model, fn_transform, fpath):
+    return model(fn_transform(Image.open(fpath)).unsqueeze(0))
 
-def embedding_distances(model, transform, list_of_query_paths):
+
+def gen_embedding_distances(model, fn_transform, list_of_query_paths):
     torch.set_grad_enabled(False);
     model.eval();
 
     list_of_seg_paths      = [to_segment_path(p) for p in list_of_query_paths]
-    list_of_seg_embeddings = [model(transform(Image.open(seg_path)).unsqueeze(0))
+    list_of_seg_embeddings = [embeddings(model, fn_transform, seg_path)
             for seg_path in list_of_seg_paths]
 
-    result = []
     for query_path in list_of_query_paths:
-        query_embedding       = model(transform(Image.open(query_path)).unsqueeze(0))
+        query_embedding       = embeddings(model, fn_transform, query_path)
         list_of_seg_distances = [torch.cdist(query_embedding, e).item()
                 for e in list_of_seg_embeddings]
         list_of_seg_dist_path = [{'distance': d, 'path': p}
                 for p, d in zip(list_of_seg_paths, list_of_seg_distances)]
-        result.append({ 'query': query_path, 'segments': list_of_seg_dist_path })
-    return result
+        yield { 'query_path': query_path, 'segments': list_of_seg_dist_path }
 
+
+def plot_image(axis, fpath, border=None):
+    if border:
+        for spine_pos in ['bottom','top', 'right', 'left']:
+            axis.spines[spine_pos].set_color(border['color'])
+            axis.spines[spine_pos].set_linewidth(border['width'])
+    axis.xaxis.set_visible(False)
+    axis.yaxis.set_visible(False)
+    axis.imshow(mpimg.imread(fpath))
+
+
+def plot_closest_distances(an_embedding_distance):
+    query_path = an_embedding_distance['query_path']
+    fig, axis  = plt.subplots(1, 5, constrained_layout=True)
+    plot_image(axis[0], query_path)
+
+    list_of_segments = sorted(
+            an_embedding_distance['segments'], key=itemgetter('distance'))
+    for i in range(1, 5):
+        segment_path = list_of_segments[i - 1]['path']
+        border_color = 'green' if segment_path == to_segment_path(query_path) else 'red'
+        plot_image(axis[i], segment_path, border={'color': border_color, 'width': 3})
 
 
 if __name__ == "__main__":
@@ -85,5 +109,5 @@ if __name__ == "__main__":
         T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
     ])
 
-    result = embedding_distances(model, transform, read_queries_paths(DATASET_PATH, 'val.txt'))
+    result = gen_embedding_distances(model, transform, read_queries_paths(DATASET_PATH, 'val.txt'))
 
