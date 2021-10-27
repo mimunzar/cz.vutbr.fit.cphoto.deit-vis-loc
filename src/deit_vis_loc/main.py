@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+import timm
+import torch
+import torchvision
+import torchvision.transforms as T
+from PIL import Image
+from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+
 import os
 
 
@@ -47,7 +54,36 @@ def gen_triplets(list_of_query_paths, fn_to_segment_path):
     return result
 
 
+
+def embedding_distances(model, transform, list_of_query_paths):
+    torch.set_grad_enabled(False);
+    model.eval();
+
+    list_of_seg_paths      = [to_segment_path(p) for p in list_of_query_paths]
+    list_of_seg_embeddings = [model(transform(Image.open(seg_path)).unsqueeze(0))
+            for seg_path in list_of_seg_paths]
+
+    result = []
+    for query_path in list_of_query_paths:
+        query_embedding       = model(transform(Image.open(query_path)).unsqueeze(0))
+        list_of_seg_distances = [torch.cdist(query_embedding, e).item()
+                for e in list_of_seg_embeddings]
+        list_of_seg_dist_path = [{'distance': d, 'path': p}
+                for p, d in zip(list_of_seg_paths, list_of_seg_distances)]
+        result.append({ 'query': query_path, 'segments': list_of_seg_dist_path })
+    return result
+
+
+
 if __name__ == "__main__":
-    list_of_batches  = partition(BATCH_SIZE, read_queries_paths(DATASET_PATH, 'train.txt'))
-    list_of_triplets = (gen_triplets(b, to_segment_path) for b in list_of_batches)
+    model = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)
+
+    transform = T.Compose([
+        T.Resize(256, interpolation=3),
+        T.CenterCrop(224),
+        T.ToTensor(),
+        T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
+    ])
+
+    result = embedding_distances(model, transform, read_queries_paths(DATASET_PATH, 'val.txt'))
 
