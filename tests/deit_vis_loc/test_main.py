@@ -5,14 +5,6 @@ import src.deit_vis_loc.main as main
 from operator import itemgetter
 
 
-def test_partition():
-    assert main.partition(1, []) == []
-    assert main.partition(1, [1, 2, 3]) == [[1], [2], [3]]
-    assert main.partition(2, [1, 2, 3]) == [[1, 2], [3]]
-    assert main.partition(3, [1, 2, 3]) == [[1, 2, 3]]
-    assert main.partition(4, [1, 2, 3]) == [[1, 2, 3]]
-
-
 def test_generate_triplets():
     fn_to_segment_path = lambda s: s + '_segment'
     assert main.gen_triplets([], fn_to_segment_path) == []
