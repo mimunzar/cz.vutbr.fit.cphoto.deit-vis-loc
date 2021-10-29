@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
+import PIL.Image
 import torch
-import torchvision.transforms as T
-from PIL import Image
+import torchvision.transforms
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import os
@@ -26,7 +26,7 @@ def read_queries_paths(dataset_path, name):
 
 
 def embeddings(model, fn_transform, fpath):
-    return model(fn_transform(Image.open(fpath)).unsqueeze(0))
+    return model(fn_transform(PIL.Image.open(fpath)).unsqueeze(0))
 
 
 def gen_embedding_distances(model, fn_transform, list_of_query_paths):
@@ -46,7 +46,7 @@ def gen_embedding_distances(model, fn_transform, list_of_query_paths):
         yield { 'query_path': query_path, 'segments': list_of_seg_dist_path }
 
 
-def gen_triplets(list_of_query_paths, fn_to_segment_path):
+def triplets(list_of_query_paths, fn_to_segment_path):
     result             = []
     set_of_query_paths = set(list_of_query_paths)
     for query_path in list_of_query_paths:
@@ -60,27 +60,34 @@ def gen_triplets(list_of_query_paths, fn_to_segment_path):
     return result
 
 
-def train_one_epoch(model, fn_transform, list_of_query_paths):
-    # model.train()
-
-    list_of_triplets = gen_triplets(list_of_query_paths, utils.to_segment_path)
+def gen_loss(model, fn_transform, list_of_query_paths):
+    list_of_triplets = triplets(list_of_query_paths, utils.to_segment_path)
     random.shuffle(list_of_triplets)
-
     for tp in list_of_triplets:
         a_embed = embeddings(model, fn_transform, tp['anchor'])
         a_p_dis = torch.cdist(a_embed, embeddings(model, fn_transform, tp['positive']))
         a_n_dis = torch.cdist(a_embed, embeddings(model, fn_transform, tp['negative']))
-        tp_loss = torch.max(torch.tensor(0), a_p_dis - a_n_dis + 0.2)
+        yield torch.max(torch.tensor(0), a_p_dis - a_n_dis + 0.2)
+
+
+def train_one_batch(model, optimizer, fn_transform, list_of_query_paths):
+    model.train()
+    for loss in gen_loss(model, fn_transform, list_of_query_paths):
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
 
 if __name__ == "__main__":
     model     = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)
-    transform = T.Compose([
-        T.Resize(256, interpolation=3),
-        T.CenterCrop(224),
-        T.ToTensor(),
-        T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
+    optimizer = torch.optim.Adam(model.parameters(), 1e-4)
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.Resize(256, interpolation=3),
+        torchvision.transforms.CenterCrop(224),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
     ])
 
-    train_one_epoch(model, transform, read_queries_paths(DATASET_PATH, 'train.txt'))
+    batch = utils.partition(10, read_queries_paths(DATASET_PATH, 'train.txt'))
+    train_one_batch(model, optimizer, transform, batch[0])
 
