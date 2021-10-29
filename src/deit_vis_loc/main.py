@@ -15,12 +15,11 @@ DATASET_PATH = '.git/datasets/GeoPose3K_v2/'
 BATCH_SIZE   = 100
 
 
-def read_queries_paths(dataset_path, name):
+def gen_query_paths(dataset_path, name):
     queries_dpath = os.path.join(dataset_path, 'query_original_result')
     dataset_fpath = os.path.join(queries_dpath, name)
     if os.path.exists(dataset_fpath):
-        with open(dataset_fpath) as f:
-            return [os.path.join(queries_dpath, line.strip()) for line in f]
+        return (os.path.join(queries_dpath, l.strip()) for l in open(dataset_fpath))
     raise FileNotFoundError(
             'Failed to read queries paths ({} not found in {})'.format(name, queries_dpath))
 
@@ -46,22 +45,20 @@ def gen_embedding_distances(model, fn_transform, list_of_query_paths):
         yield { 'query_path': query_path, 'segments': list_of_seg_dist_path }
 
 
-def triplets(list_of_query_paths, fn_to_segment_path):
-    result             = []
+def gen_triplets(list_of_query_paths, fn_to_segment_path):
     set_of_query_paths = set(list_of_query_paths)
     for query_path in list_of_query_paths:
         pos_segment = fn_to_segment_path(query_path)
         for neg_path in set_of_query_paths - set([query_path]):
-            result.append({
+            yield {
                 'anchor'  : query_path,
                 'positive': pos_segment,
                 'negative': fn_to_segment_path(neg_path)
-            })
-    return result
+            }
 
 
 def gen_loss(model, fn_transform, list_of_query_paths):
-    list_of_triplets = triplets(list_of_query_paths, utils.to_segment_path)
+    list_of_triplets = list(gen_triplets(list_of_query_paths, utils.to_segment_path))
     random.shuffle(list_of_triplets)
     for tp in list_of_triplets:
         a_embed = embeddings(model, fn_transform, tp['anchor'])
@@ -88,6 +85,6 @@ if __name__ == "__main__":
         torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
     ])
 
-    batch = utils.partition(10, read_queries_paths(DATASET_PATH, 'train.txt'))
-    train_one_batch(model, optimizer, transform, batch[0])
+    batch = utils.partition(5, gen_query_paths(DATASET_PATH, 'train.txt'))
+    train_one_batch(model, optimizer, transform, next(batch))
 

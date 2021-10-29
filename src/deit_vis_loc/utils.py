@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
 
-def partition(n, coll):
-    assert 0 < n
-    if not coll:
-        return []
-    part = coll[:n]
-    if len(part) == n:
-        return [part] + partition(n, coll[n:])
-    return [part]
+import itertools
+
+
+def partition(n, iterable):
+    i = iter(iterable)
+    return itertools.takewhile(lambda l: len(l) == n,
+            (list(itertools.islice(i, n)) for _ in itertools.repeat(None)))
 
 
 def to_segment_path(query_path):

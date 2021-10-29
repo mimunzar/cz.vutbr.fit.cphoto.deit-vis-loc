@@ -11,7 +11,7 @@ Installation
 Usage
 ---------
 
-  python src/deit_vis_loc/main.py
+  python -m src.deit_vis_loc.main
 
   .
   └── GeoPose3K_v2
