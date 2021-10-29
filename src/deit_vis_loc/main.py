@@ -12,16 +12,11 @@ import src.deit_vis_loc.utils as utils
 
 
 DATASET_PATH = '.git/datasets/GeoPose3K_v2/'
-BATCH_SIZE   = 100
-
 
 def gen_query_paths(dataset_path, name):
     queries_dpath = os.path.join(dataset_path, 'query_original_result')
     dataset_fpath = os.path.join(queries_dpath, name)
-    if os.path.exists(dataset_fpath):
-        return (os.path.join(queries_dpath, l.strip()) for l in open(dataset_fpath))
-    raise FileNotFoundError(
-            'Failed to read queries paths ({} not found in {})'.format(name, queries_dpath))
+    return (os.path.join(queries_dpath, l.strip()) for l in open(dataset_fpath))
 
 
 def embeddings(model, fn_transform, fpath):
@@ -60,6 +55,7 @@ def gen_triplets(list_of_query_paths, fn_to_segment_path):
 def gen_loss(model, fn_transform, list_of_query_paths):
     list_of_triplets = list(gen_triplets(list_of_query_paths, utils.to_segment_path))
     random.shuffle(list_of_triplets)
+    #^ Shuffle triplets so they are not sorted by an anchor
     for tp in list_of_triplets:
         a_embed = embeddings(model, fn_transform, tp['anchor'])
         a_p_dis = torch.cdist(a_embed, embeddings(model, fn_transform, tp['positive']))
@@ -67,12 +63,13 @@ def gen_loss(model, fn_transform, list_of_query_paths):
         yield torch.max(torch.tensor(0), a_p_dis - a_n_dis + 0.2)
 
 
-def train_one_batch(model, optimizer, fn_transform, list_of_query_paths):
+def train_one_epoch(model, optimizer, fn_transform, list_of_query_paths):
     model.train()
-    for loss in gen_loss(model, fn_transform, list_of_query_paths):
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+    for batch in utils.partition(104, list_of_query_paths):
+        for loss in gen_loss(model, fn_transform, batch):
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
 
 if __name__ == "__main__":
@@ -85,6 +82,8 @@ if __name__ == "__main__":
         torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
     ])
 
-    batch = utils.partition(5, gen_query_paths(DATASET_PATH, 'train.txt'))
-    train_one_batch(model, optimizer, transform, next(batch))
+    list_of_query_paths = list(gen_query_paths(DATASET_PATH, 'train.txt'))
+    random.shuffle(list_of_query_paths)
+    #^ Shuffle dataset so the generated batches are different every time
+    train_one_epoch(model, optimizer, transform, list_of_query_paths)
 
