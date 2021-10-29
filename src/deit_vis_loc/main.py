@@ -19,20 +19,20 @@ def gen_query_paths(dataset_path, name):
     return (os.path.join(queries_dpath, l.strip()) for l in open(dataset_fpath))
 
 
-def embeddings(model, fn_transform, fpath):
-    return model(fn_transform(PIL.Image.open(fpath)).unsqueeze(0))
+def embeddings(model, fn_transform, device, fpath):
+    return model(fn_transform(PIL.Image.open(fpath)).unsqueeze(0).to(device))
 
 
-def gen_embedding_distances(model, fn_transform, list_of_query_paths):
+def gen_embedding_distances(model, fn_transform, device, list_of_query_paths):
     torch.set_grad_enabled(False);
     model.eval();
 
     list_of_seg_paths      = [utils.to_segment_path(p) for p in list_of_query_paths]
-    list_of_seg_embeddings = [embeddings(model, fn_transform, seg_path)
+    list_of_seg_embeddings = [embeddings(model, fn_transform, device, seg_path)
             for seg_path in list_of_seg_paths]
 
     for query_path in list_of_query_paths:
-        query_embedding       = embeddings(model, fn_transform, query_path)
+        query_embedding       = embeddings(model, fn_transform, device, query_path)
         list_of_seg_distances = [torch.cdist(query_embedding, e).item()
                 for e in list_of_seg_embeddings]
         list_of_seg_dist_path = [{'distance': d, 'path': p}
@@ -40,50 +40,67 @@ def gen_embedding_distances(model, fn_transform, list_of_query_paths):
         yield { 'query_path': query_path, 'segments': list_of_seg_dist_path }
 
 
-def gen_triplets(list_of_query_paths, fn_to_segment_path):
-    set_of_query_paths = set(list_of_query_paths)
-    for query_path in list_of_query_paths:
-        pos_segment = fn_to_segment_path(query_path)
-        for neg_path in set_of_query_paths - set([query_path]):
+def gen_triplets(list_of_anchor_imgs, fn_to_segment_img):
+    set_of_anchors = set(list_of_anchor_imgs)
+    for anchor_img in list_of_anchor_imgs:
+        positive_segment = fn_to_segment_img(anchor_img)
+        for negative_img in set_of_anchors - set([anchor_img]):
             yield {
-                'anchor'  : query_path,
-                'positive': pos_segment,
-                'negative': fn_to_segment_path(neg_path)
+                'anchor'  : anchor_img,
+                'positive': positive_segment,
+                'negative': fn_to_segment_img(negative_img)
             }
 
 
-def gen_loss(model, fn_transform, list_of_query_paths):
-    list_of_triplets = list(gen_triplets(list_of_query_paths, utils.to_segment_path))
+def gen_tensor_triplets(fn_to_tensor, list_of_triplets):
+    to_tensor_triplet = lambda t: {k: fn_to_tensor(v) for k,v in t.items()}
+    return (to_tensor_triplet(t) for t in list_of_triplets)
+
+
+def gen_triplet_loss(fn_triplet_loss, fn_to_tensor, list_of_imgs):
+    list_of_triplets = list(gen_triplets(list_of_imgs, utils.to_segment_path))
     random.shuffle(list_of_triplets)
     #^ Shuffle triplets so they are not sorted by an anchor
-    for tp in list_of_triplets:
-        a_embed = embeddings(model, fn_transform, tp['anchor'])
-        a_p_dis = torch.cdist(a_embed, embeddings(model, fn_transform, tp['positive']))
-        a_n_dis = torch.cdist(a_embed, embeddings(model, fn_transform, tp['negative']))
-        yield torch.max(torch.tensor(0), a_p_dis - a_n_dis + 0.2)
+    return (fn_triplet_loss(t) for t in gen_tensor_triplets(fn_to_tensor, list_of_triplets))
 
 
-def train_one_epoch(model, optimizer, fn_transform, list_of_query_paths):
+def train_one_epoch(model, optimizer, fn_triplet_loss, fn_to_tensor, list_of_imgs):
     model.train()
-    for batch in utils.partition(104, list_of_query_paths):
-        for loss in gen_loss(model, fn_transform, batch):
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+    for batch_of_imgs in utils.partition(104, list_of_imgs):
+        for loss in gen_triplet_loss(fn_triplet_loss, fn_to_tensor, batch_of_imgs):
+            optimizer.zero_grad(); loss.backward(); optimizer.step()
 
 
-if __name__ == "__main__":
-    model     = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)
-    optimizer = torch.optim.Adam(model.parameters(), 1e-4)
-    transform = torchvision.transforms.Compose([
+def make_triplet_loss(device, margin):
+    def triplet_loss(triplet):
+        a_embed = model(triplet['anchor'])
+        a_p_dis = torch.cdist(a_embed, model(triplet['positive']))
+        a_n_dis = torch.cdist(a_embed, model(triplet['negative']))
+        return torch.max(torch.tensor(0).to(device), a_p_dis - a_n_dis + margin)
+    return triplet_loss
+
+
+def make_img_to_tensor(device):
+    to_tensor = torchvision.transforms.Compose([
         torchvision.transforms.Resize(256, interpolation=3),
         torchvision.transforms.CenterCrop(224),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
     ])
+    return lambda im_path: to_tensor(PIL.Image.open(im_path)).unsqueeze(0).to(device)
 
-    list_of_query_paths = list(gen_query_paths(DATASET_PATH, 'train.txt'))
-    random.shuffle(list_of_query_paths)
-    #^ Shuffle dataset so the generated batches are different every time
-    train_one_epoch(model, optimizer, transform, list_of_query_paths)
+
+if __name__ == "__main__":
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model  = torch.hub.load('facebookresearch/deit:main', 'deit_tiny_patch16_224', pretrained=True)
+    model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), 1e-4)
+
+    list_of_imgs = list(gen_query_paths(DATASET_PATH, 'train.txt'))
+    random.shuffle(list_of_imgs)
+    #^ Shuffle dataset so generated batches are different every time
+
+    fn_img_to_tensor = make_img_to_tensor(device)
+    fn_triplet_loss  = make_triplet_loss(device, margin=0.2)
+    train_one_epoch(model, optimizer, fn_triplet_loss, fn_img_to_tensor, list_of_imgs)
 
