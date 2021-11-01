@@ -2,6 +2,7 @@
 
 import itertools as it
 import operator  as op
+import functools as ft
 
 
 def partition(n, iterable):
@@ -10,10 +11,24 @@ def partition(n, iterable):
             (list(it.islice(iterable, n)) for _ in it.repeat(None)))
 
 
-def to_segment_img(query_path):
-    return query_path \
-        .replace('query_original_result', 'query_segments_result') \
+def to_segment_img(fpath):
+    return fpath.replace('query_original_result', 'query_segments_result') \
         .replace('.jpg', '.png')
+
+
+def make_validator(msg, fn_valid):
+    return lambda *args: (True, None) if fn_valid(*args) else (False, msg)
+
+
+def make_checker(dict_of_validators):
+    def check_dict(dict_to_check):
+        result = []
+        for k, fn_val in dict_of_validators.items():
+            success, msg = fn_val(dict_to_check[k])
+            if not success:
+                result.append(msg)
+        return result
+    return check_dict
 
 
 def _plot_img(axis, fpath, border=None):

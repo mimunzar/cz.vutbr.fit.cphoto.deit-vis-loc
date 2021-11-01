@@ -1,7 +1,7 @@
 Visual Localization using DeiT Transformer
 ==========================================
 
-** The tools is still a work in progress **
+** The tool is still a work in progress **
 
 Allows to train DeiT transformer for a visual localization [1].  The transformer
 is trained on a sets of natural images and rendered views.  The task is to  find
@@ -18,9 +18,11 @@ command:
     conda env create environment.yml
 
 
-Usage
----------
+Usage for Model Training [TODO]
+-------------------------------
 
+First download the GeoPose3K dataset [3].  The dataset should have the following
+structure:
     .
     └── GeoPose3K_v2
         ├── database_segments
@@ -30,8 +32,28 @@ Usage
         │   └── val.txt
         └── query_segments_result
 
+Next specify model parameters in a JSON file. The parameters must have following
+items:
 
-    python -m src.deit_vis_loc.main
+    {
+        "deit_model"    : "deit_tiny_patch16_224",
+        "epochs"        : 10,
+        "batch_size"    : 104,
+        "triplet_margin": 0.2,
+        "learning_rate" : 0.0001
+    }
+
+
+Then start trainining by executing the following command:
+
+    python -m src.deit_vis_loc.train_model \
+        --dataset_dir <PATH> \
+        --save_dir    <PATH> \
+        --params      <PATH>
+
+
+Usage for Model Testing [TODO]
+------------------------------
 
 
 Tests
@@ -40,9 +62,14 @@ Tests
   python -m pytest
 
 
+Possible Improvements [TODO]
+----------------------------
+
+
 References
 ----------
 
   [1]: https://github.com/facebookresearch/deit
   [2]: http://cphoto.fit.vutbr.cz/crosslocate
+  [3]: http://cphoto.fit.vutbr.cz/geoPose3K
 
