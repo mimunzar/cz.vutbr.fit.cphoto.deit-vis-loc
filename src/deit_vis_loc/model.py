@@ -5,8 +5,11 @@ import torch
 import torchvision.transforms
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
+import json
 import os
 import random
+import time
+from datetime import datetime
 
 import src.deit_vis_loc.utils as utils
 
@@ -77,6 +80,21 @@ def gen_evaluate_model(model, fn_img_to_tensor, list_of_anchor_imgs):
         yield { 'anchor': anchor_img, 'segments': zip(list_of_segment_imgs, s_dists) }
 
 
+def make_save_model(save_dpath, params):
+    time_str  = datetime.fromtimestamp(time.time()).strftime("%Y%m%dT%H%M%S")
+    param_str = '-'.join(str(params[k]) for k in ['deit_model', 'batch_size'])
+
+    os.makedirs(save_dpath, exist_ok=True)
+    params_filename = '-'.join([time_str, param_str]) + '.json'
+    with open(os.path.join(save_dpath, params_filename), 'w') as f:
+        json.dump(params, f, indent=4)
+
+    def save_model(model, epoch):
+        model_filename = '-'.join([time_str, param_str, str(epoch + 1).zfill(3)]) + '.torch'
+        torch.save(model, os.path.join(save_dpath, model_filename))
+    return save_model
+
+
 def train(dataset_dpath, save_dpath, params):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     model  = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True)
@@ -88,8 +106,10 @@ def train(dataset_dpath, save_dpath, params):
     random.shuffle(list_of_train_imgs)
     #^ Shuffle dataset so generated batches are different every time
 
-    fn_img_to_tensor = make_img_to_tensor(device)
-    fn_triplet_loss  = make_triplet_loss(model, device, margin=params['triplet_margin'])
-    for _ in range(params['epochs']):
-        train_epoch(model, optimizer, fn_triplet_loss, fn_img_to_tensor, params['batch_size'], list_of_train_imgs)
+    img_to_tensor = make_img_to_tensor(device)
+    triplet_loss  = make_triplet_loss(model, device, margin=params['triplet_margin'])
+    save_model    = make_save_model(save_dpath, params)
+    for epoch in range(params['epochs']):
+        train_epoch(model, optimizer, triplet_loss, img_to_tensor, params['batch_size'], list_of_train_imgs)
+        save_model(model, epoch)
 
