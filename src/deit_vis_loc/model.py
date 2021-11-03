@@ -68,21 +68,8 @@ def make_img_to_tensor(device):
     return lambda img: to_tensor(PIL.Image.open(img)).unsqueeze(0).to(device)
 
 
-def gen_evaluate_model(model, fn_img_to_tensor, list_of_anchor_imgs):
-    torch.set_grad_enabled(False);
-    model.eval();
-
-    list_of_anchor_imgs  = list(list_of_anchor_imgs)
-    list_of_segment_imgs = [utils.to_segment_img(a) for a in list_of_anchor_imgs]
-    compute_embeddings   = lambda im_path: model(fn_img_to_tensor(im_path))
-    for anchor_img in list_of_anchor_imgs:
-        a_embed = compute_embeddings(anchor_img)
-        s_dists = (torch.cdist(a_embed, compute_embeddings(s)) for s in list_of_segment_imgs)
-        yield { 'anchor': anchor_img, 'segments': zip(list_of_segment_imgs, s_dists) }
-
-
 def make_save_model(save_dpath, params):
-    time_str  = datetime.fromtimestamp(time.time()).strftime("%Y%m%dT%H%M%S")
+    time_str  = datetime.fromtimestamp(time.time()).strftime('%Y%m%dT%H%M%S')
     param_str = '-'.join(str(params[k]) for k in ['deit_model', 'batch_size'])
 
     os.makedirs(save_dpath, exist_ok=True)
@@ -98,7 +85,7 @@ def make_save_model(save_dpath, params):
 
 
 def train(dataset_dpath, save_dpath, params):
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     model  = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True)
     model.to(device)
 
@@ -111,13 +98,36 @@ def train(dataset_dpath, save_dpath, params):
     img_to_tensor = make_img_to_tensor(device)
     triplet_loss  = make_triplet_loss(model, device, margin=params['triplet_margin'])
     save_model    = make_save_model(save_dpath, params)
-    utils.log("Started training with {}".format(json.dumps(params)))
+    utils.log('Started training with {}'.format(json.dumps(params)))
     for epoch in range(1, params['epochs'] + 1):
         gen_batches  = utils.partition(params['batch_size'], list_of_imgs)
         gen_loss     = train_epoch(model, optimizer, triplet_loss, img_to_tensor, gen_batches)
         running_loss = torch.sum(torch.stack(list(gen_loss)))
-        utils.log("Running loss for epoch {} is {}".format(epoch, running_loss))
+        utils.log('Running loss for epoch {} is {}'.format(epoch, running_loss))
         save_model(model, epoch)
 
-    utils.log("Finished training")
+    utils.log('Finished training')
+
+
+def gen_evaluate_model(model, fn_img_to_tensor, list_of_anchor_imgs):
+    torch.set_grad_enabled(False);
+    model.eval();
+
+    list_of_anchor_imgs  = list(list_of_anchor_imgs)
+    list_of_segment_imgs = [utils.to_segment_img(a) for a in list_of_anchor_imgs]
+    compute_embeddings   = lambda im_path: model(fn_img_to_tensor(im_path))
+    for anchor_img in list_of_anchor_imgs:
+        a_embed = compute_embeddings(anchor_img)
+        s_dists = (torch.cdist(a_embed, compute_embeddings(s)) for s in list_of_segment_imgs)
+        yield { 'anchor': anchor_img, 'segments': zip(list_of_segment_imgs, s_dists) }
+
+
+def test(dataset_dpath, model_fpath):
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    model  = torch.load(model_fpath)
+    model.to(device)
+
+    list_of_imgs  = list(gen_anchor_imgs(dataset_dpath, 'test.txt'))
+    img_to_tensor = make_img_to_tensor(device)
+    return gen_evaluate_model(model, img_to_tensor, list_of_imgs)
 

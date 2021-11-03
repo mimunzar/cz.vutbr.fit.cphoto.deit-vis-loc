@@ -55,6 +55,10 @@ Then start trainining by executing the following command:
 Usage for Model Testing [TODO]
 ------------------------------
 
+    python -m src.deit_vis_loc.test_model \
+        --dataset_dir <PATH> \
+        --model       <PATH>
+
 
 Tests
 -----
