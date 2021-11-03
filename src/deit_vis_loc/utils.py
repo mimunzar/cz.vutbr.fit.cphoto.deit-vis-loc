@@ -2,7 +2,7 @@
 
 import itertools as it
 import operator  as op
-import functools as ft
+import datetime  as dt
 
 
 def partition(n, iterable):
@@ -29,6 +29,11 @@ def make_checker(dict_of_validators):
                 result.append(msg)
         return result
     return check_dict
+
+
+def log(msg):
+    d = dt.datetime.now(tz=dt.timezone.utc)
+    print('[{}] {}'.format(d.strftime("%Y%m%dT%H%M%S"), msg))
 
 
 def _plot_img(axis, fpath, border=None):

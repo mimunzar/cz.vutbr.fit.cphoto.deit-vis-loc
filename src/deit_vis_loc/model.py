@@ -40,12 +40,13 @@ def gen_triplet_loss(fn_triplet_loss, fn_img_to_tensor, list_of_imgs):
     return (fn_triplet_loss(tt) for tt in (to_tensor_triplet(t) for t in list_of_triplets))
 
 
-def train_epoch(model, optimizer, fn_triplet_loss, fn_img_to_tensor, batch_size, list_of_imgs):
+def train_epoch(model, optimizer, fn_triplet_loss, fn_img_to_tensor, gen_img_batches):
     model.train()
 
-    for batch_of_imgs in utils.partition(batch_size, list_of_imgs):
-        for loss in gen_triplet_loss(fn_triplet_loss, fn_img_to_tensor, batch_of_imgs):
+    for list_of_imgs in gen_img_batches:
+        for loss in gen_triplet_loss(fn_triplet_loss, fn_img_to_tensor, list_of_imgs):
             optimizer.zero_grad(); loss.backward(); optimizer.step()
+            yield loss
 
 
 def make_triplet_loss(model, device, margin):
@@ -90,7 +91,8 @@ def make_save_model(save_dpath, params):
         json.dump(params, f, indent=4)
 
     def save_model(model, epoch):
-        model_filename = '-'.join([time_str, param_str, str(epoch + 1).zfill(3)]) + '.torch'
+        epoch_str      = str(epoch).zfill(3)
+        model_filename = '-'.join([time_str, param_str, epoch_str]) + '.torch'
         torch.save(model, os.path.join(save_dpath, model_filename))
     return save_model
 
@@ -102,14 +104,20 @@ def train(dataset_dpath, save_dpath, params):
 
     optimizer = torch.optim.Adam(model.parameters(), params['learning_rate'])
 
-    list_of_train_imgs = list(gen_anchor_imgs(dataset_dpath, 'train.txt'))
-    random.shuffle(list_of_train_imgs)
+    list_of_imgs = list(gen_anchor_imgs(dataset_dpath, 'train.txt'))
+    random.shuffle(list_of_imgs)
     #^ Shuffle dataset so generated batches are different every time
 
     img_to_tensor = make_img_to_tensor(device)
     triplet_loss  = make_triplet_loss(model, device, margin=params['triplet_margin'])
     save_model    = make_save_model(save_dpath, params)
-    for epoch in range(params['epochs']):
-        train_epoch(model, optimizer, triplet_loss, img_to_tensor, params['batch_size'], list_of_train_imgs)
+    utils.log("Started training with {}".format(json.dumps(params)))
+    for epoch in range(1, params['epochs'] + 1):
+        gen_batches  = utils.partition(params['batch_size'], list_of_imgs)
+        gen_loss     = train_epoch(model, optimizer, triplet_loss, img_to_tensor, gen_batches)
+        running_loss = torch.sum(torch.stack(list(gen_loss)))
+        utils.log("Running loss for epoch {} is {}".format(epoch, running_loss))
         save_model(model, epoch)
+
+    utils.log("Finished training")
 
