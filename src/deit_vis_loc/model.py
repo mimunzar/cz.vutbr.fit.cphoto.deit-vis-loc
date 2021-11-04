@@ -113,7 +113,6 @@ def gen_evaluate_model(model, fn_img_to_tensor, list_of_anchor_imgs):
     torch.set_grad_enabled(False);
     model.eval();
 
-    list_of_anchor_imgs  = list(list_of_anchor_imgs)
     list_of_segment_imgs = [utils.to_segment_img(a) for a in list_of_anchor_imgs]
     compute_embeddings   = lambda im_path: model(fn_img_to_tensor(im_path))
     for anchor_img in list_of_anchor_imgs:
