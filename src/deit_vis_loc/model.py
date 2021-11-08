@@ -32,23 +32,6 @@ def gen_triplets(list_of_anchor_imgs, fn_to_segment_img):
             }
 
 
-def gen_triplet_loss(fn_triplet_loss, fn_img_to_tensor, list_of_imgs):
-    list_of_triplets = list(gen_triplets(list_of_imgs, utils.to_segment_img))
-    random.shuffle(list_of_triplets)
-    #^ Shuffle triplets so they are not sorted by an anchor
-    to_tensor_triplet = lambda t: {k: fn_img_to_tensor(v) for k,v in t.items()}
-    return (fn_triplet_loss(tt) for tt in (to_tensor_triplet(t) for t in list_of_triplets))
-
-
-def train_epoch(model, optimizer, fn_triplet_loss, fn_img_to_tensor, gen_img_batches):
-    model.train()
-
-    for list_of_imgs in gen_img_batches:
-        for loss in gen_triplet_loss(fn_triplet_loss, fn_img_to_tensor, list_of_imgs):
-            optimizer.zero_grad(); loss.backward(); optimizer.step()
-            yield loss
-
-
 def make_triplet_loss(model, device, margin):
     def triplet_loss(triplet):
         a_embed = model(triplet['anchor'])
@@ -56,6 +39,24 @@ def make_triplet_loss(model, device, margin):
         a_n_dis = torch.cdist(a_embed, model(triplet['negative']))
         return torch.max(torch.tensor(0, device=device), a_p_dis - a_n_dis + margin)
     return triplet_loss
+
+
+def make_batch_triplet_loss_gen(fn_triplet_loss, fn_img_to_tensor):
+    def batch_triplet_loss_gen(list_of_imgs):
+        list_of_triplets = list(gen_triplets(list_of_imgs, utils.to_segment_img))
+        random.shuffle(list_of_triplets)
+        #^ Shuffle triplets so they are not sorted by an anchor
+        to_tensor_triplet = lambda t: {k: fn_img_to_tensor(v) for k,v in t.items()}
+        return (fn_triplet_loss(tt) for tt in (to_tensor_triplet(t) for t in list_of_triplets))
+    return batch_triplet_loss_gen
+
+
+def train_epoch(model, optimizer, fn_batch_loss_gen, gen_batches):
+    model.train()
+    for batch in gen_batches:
+        for loss in fn_batch_loss_gen(batch):
+            optimizer.zero_grad(); loss.backward(); optimizer.step()
+            yield loss
 
 
 def make_img_to_tensor(device):
@@ -88,20 +89,19 @@ def train(dataset_dpath, save_dpath, params):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     model  = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True)
     model.to(device)
-
     optimizer = torch.optim.Adam(model.parameters(), params['learning_rate'])
 
-    list_of_imgs = list(gen_anchor_imgs(dataset_dpath, 'train.txt'))
-    random.shuffle(list_of_imgs)
-    #^ Shuffle dataset so generated batches are different every time
+    triplet_loss   = make_triplet_loss(model, device, params['triplet_margin'])
+    batch_loss_gen = make_batch_triplet_loss_gen(triplet_loss, make_img_to_tensor(device))
 
-    img_to_tensor = make_img_to_tensor(device)
-    triplet_loss  = make_triplet_loss(model, device, margin=params['triplet_margin'])
-    save_model    = make_save_model(save_dpath, params)
+    list_of_imgs = list(gen_anchor_imgs(dataset_dpath, 'train.txt'))
+    save_model   = make_save_model(save_dpath, params)
     utils.log('Started training with {}'.format(json.dumps(params)))
     for epoch in range(1, params['epochs'] + 1):
+        random.shuffle(list_of_imgs)
+        #^ Shuffle dataset so generated batches are different every time
         gen_batches  = utils.partition(params['batch_size'], list_of_imgs)
-        gen_loss     = train_epoch(model, optimizer, triplet_loss, img_to_tensor, gen_batches)
+        gen_loss     = train_epoch(model, optimizer, batch_loss_gen, gen_batches)
         running_loss = torch.sum(torch.stack(list(gen_loss)))
         utils.log('Running loss for epoch {} is {}'.format(epoch, running_loss))
         save_model(model, epoch)
