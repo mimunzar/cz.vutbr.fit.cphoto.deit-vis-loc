@@ -32,23 +32,14 @@ def gen_triplets(list_of_anchor_imgs, fn_to_segment_img):
             }
 
 
-def make_triplet_loss(model, device, margin):
-    def triplet_loss(triplet):
-        a_embed = model(triplet['anchor'])
-        a_p_dis = torch.cdist(a_embed, model(triplet['positive']))
-        a_n_dis = torch.cdist(a_embed, model(triplet['negative']))
-        return torch.max(torch.tensor(0, device=device), a_p_dis - a_n_dis + margin)
-    return triplet_loss
-
-
-def make_batch_triplet_loss_gen(fn_triplet_loss, fn_img_to_tensor):
-    def batch_triplet_loss_gen(list_of_imgs):
-        list_of_triplets = list(gen_triplets(list_of_imgs, utils.to_segment_img))
-        random.shuffle(list_of_triplets)
-        #^ Shuffle triplets so they are not sorted by an anchor
+def make_batch_all_triplet_loss(fn_triplet_loss, fn_img_to_tensor):
+    def batch_all_triplet_loss(list_of_imgs):
         to_tensor_triplet = lambda t: {k: fn_img_to_tensor(v) for k,v in t.items()}
-        return (fn_triplet_loss(tt) for tt in (to_tensor_triplet(t) for t in list_of_triplets))
-    return batch_triplet_loss_gen
+        img_triplets      = gen_triplets(list_of_imgs, utils.to_segment_img)
+        tensor_triplets   = (to_tensor_triplet(t) for t in img_triplets)
+        triplet_loss      = (fn_triplet_loss(t) for t in tensor_triplets)
+        return (l for l in triplet_loss if torch.is_nonzero(l))
+    return batch_all_triplet_loss
 
 
 def train_epoch(model, optimizer, fn_batch_loss_gen, gen_batches):
@@ -57,6 +48,15 @@ def train_epoch(model, optimizer, fn_batch_loss_gen, gen_batches):
         for loss in fn_batch_loss_gen(batch):
             optimizer.zero_grad(); loss.backward(); optimizer.step()
             yield loss
+
+
+def make_triplet_loss(model, device, margin):
+    def triplet_loss(triplet):
+        a_embed = model(triplet['anchor'])
+        a_p_dis = torch.cdist(a_embed, model(triplet['positive']))
+        a_n_dis = torch.cdist(a_embed, model(triplet['negative']))
+        return torch.max(torch.tensor(0, device=device), a_p_dis - a_n_dis + margin)
+    return triplet_loss
 
 
 def make_img_to_tensor(device):
@@ -92,7 +92,7 @@ def train(dataset_dpath, save_dpath, params):
     optimizer = torch.optim.Adam(model.parameters(), params['learning_rate'])
 
     triplet_loss   = make_triplet_loss(model, device, params['triplet_margin'])
-    batch_loss_gen = make_batch_triplet_loss_gen(triplet_loss, make_img_to_tensor(device))
+    batch_loss_gen = make_batch_all_triplet_loss(triplet_loss, make_img_to_tensor(device))
 
     list_of_imgs = list(gen_anchor_imgs(dataset_dpath, 'train.txt'))
     save_model   = make_save_model(save_dpath, params)
