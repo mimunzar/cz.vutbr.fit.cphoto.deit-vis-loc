@@ -33,11 +33,11 @@ def gen_triplets(list_of_anchor_imgs, fn_to_segment_img):
 
 
 def make_batch_all_triplet_loss(fn_triplet_loss, fn_img_to_tensor):
+    to_tensor_triplet = lambda t: {k: fn_img_to_tensor(v) for k,v in t.items()}
     def batch_all_triplet_loss(list_of_imgs):
-        to_tensor_triplet = lambda t: {k: fn_img_to_tensor(v) for k,v in t.items()}
-        img_triplets      = gen_triplets(list_of_imgs, utils.to_segment_img)
-        tensor_triplets   = (to_tensor_triplet(t) for t in img_triplets)
-        triplet_loss      = (fn_triplet_loss(t) for t in tensor_triplets)
+        img_triplets    = gen_triplets(list_of_imgs, utils.to_segment_img)
+        tensor_triplets = (to_tensor_triplet(t) for t in img_triplets)
+        triplet_loss    = (fn_triplet_loss(t) for t in tensor_triplets)
         return (l for l in triplet_loss if torch.is_nonzero(l))
     return batch_all_triplet_loss
 

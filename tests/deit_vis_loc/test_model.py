@@ -2,6 +2,7 @@
 
 import src.deit_vis_loc.model as model
 
+import torch
 from operator import itemgetter
 
 
@@ -19,4 +20,22 @@ def test_generate_triplets():
         {'anchor': 'foo', 'positive': 'foo_segment', 'negative': 'bar_segment'},
         {'anchor': 'foo', 'positive': 'foo_segment', 'negative': 'baz_segment'},
     ]
+
+
+def test_triplet_loss():
+    l = model.make_triplet_loss(lambda x: x, "cpu", margin=0)
+    z = torch.zeros(1, 1)
+    o = torch.ones (1, 1)
+    assert l({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.]])
+    assert l({'anchor': z, 'positive': z, 'negative': o}) == torch.tensor([[0.]])
+    assert l({'anchor': z, 'positive': o, 'negative': z}) == torch.tensor([[1.]])
+    assert l({'anchor': z, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
+    assert l({'anchor': o, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
+
+    l = model.make_triplet_loss(lambda x: x, "cpu", margin=0.5)
+    assert l({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.5]])
+    assert l({'anchor': z, 'positive': z, 'negative': o}) == torch.tensor([[0.]])
+    assert l({'anchor': z, 'positive': o, 'negative': z}) == torch.tensor([[1.5]])
+    assert l({'anchor': z, 'positive': o, 'negative': o}) == torch.tensor([[0.5]])
+    assert l({'anchor': o, 'positive': o, 'negative': o}) == torch.tensor([[0.5]])
 
