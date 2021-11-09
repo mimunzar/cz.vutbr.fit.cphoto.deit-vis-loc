@@ -23,7 +23,7 @@ def test_generate_triplets():
 
 
 def test_triplet_loss():
-    l = model.make_triplet_loss(lambda x: x, "cpu", margin=0)
+    l = model.make_triplet_loss(lambda x: x, 'cpu', margin=0)
     z = torch.zeros(1, 1)
     o = torch.ones (1, 1)
     assert l({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.]])
@@ -32,10 +32,20 @@ def test_triplet_loss():
     assert l({'anchor': z, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
     assert l({'anchor': o, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
 
-    l = model.make_triplet_loss(lambda x: x, "cpu", margin=0.5)
+    l = model.make_triplet_loss(lambda x: x, 'cpu', margin=0.5)
     assert l({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.5]])
     assert l({'anchor': z, 'positive': z, 'negative': o}) == torch.tensor([[0.]])
     assert l({'anchor': z, 'positive': o, 'negative': z}) == torch.tensor([[1.5]])
     assert l({'anchor': z, 'positive': o, 'negative': o}) == torch.tensor([[0.5]])
     assert l({'anchor': o, 'positive': o, 'negative': o}) == torch.tensor([[0.5]])
+
+
+def test_batch_all_triplet_loss():
+    z = torch.zeros(1, 1)
+    o = torch.ones (1, 1)
+    gen_l = model.make_batch_all_triplet_loss(itemgetter('anchor'), lambda x: x)
+    assert list(gen_l([]))                              == []
+    assert list(gen_l([{'anchor': z}]))                 == []
+    assert list(gen_l([{'anchor': o}]))                 == [o]
+    assert list(gen_l([{'anchor': o}, {'anchor': z} ])) == [o]
 
