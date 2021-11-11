@@ -41,11 +41,11 @@ def test_triplet_loss():
 
 
 def test_batch_all_triplet_loss():
+    gen_l = model.make_batch_all_triplet_loss(itemgetter('anchor'), lambda x: x)
     z = torch.zeros(1, 1)
     o = torch.ones (1, 1)
-    gen_l = model.make_batch_all_triplet_loss(itemgetter('anchor'), lambda x: x)
-    assert list(gen_l([]))                              == []
-    assert list(gen_l([{'anchor': z}]))                 == []
-    assert list(gen_l([{'anchor': o}]))                 == [o]
+    assert list(gen_l([])) == []
+    assert list(gen_l([{'anchor': z}])) == []
+    assert list(gen_l([{'anchor': o}])) == [o]
     assert list(gen_l([{'anchor': o}, {'anchor': z} ])) == [o]
 

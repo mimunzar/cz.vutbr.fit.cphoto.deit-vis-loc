@@ -2,6 +2,8 @@
 
 import itertools as it
 import datetime  as dt
+import functools as ft
+import operator  as op
 
 
 def partition(n, iterable):
@@ -10,8 +12,14 @@ def partition(n, iterable):
             (list(it.islice(iterable, n)) for _ in it.repeat(None)))
 
 
-def to_segment_img(fpath):
-    return fpath.replace('query_original_result', 'query_segments_result') \
+def subseq(n, iterable):
+    return it.takewhile(ft.partial(op.eq, n),
+            it.dropwhile(ft.partial(op.ne, n), iterable))
+
+
+def to_segment_img(anchor_fpath):
+    return anchor_fpath \
+        .replace('query_original_result', 'query_segments_result') \
         .replace('.jpg', '.png')
 
 
@@ -33,4 +41,3 @@ def make_checker(dict_of_validators):
 def log(msg):
     d = dt.datetime.now(tz=dt.timezone.utc)
     print('[{}] {}'.format(d.strftime("%Y%m%dT%H%M%S"), msg))
-

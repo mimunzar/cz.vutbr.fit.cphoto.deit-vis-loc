@@ -11,6 +11,14 @@ def test_partition():
     assert list(utils.partition(1, [1, 2, 3])) == [[1], [2], [3]]
 
 
+def test_subseq():
+    assert list(utils.subseq(42, [])) == []
+    assert list(utils.subseq(42, [42])) == [42]
+    assert list(utils.subseq(42, [41, 42])) == [42]
+    assert list(utils.subseq(42, [41, 42, 42])) == [42, 42]
+    assert list(utils.subseq(42, [41, 42, 42, 43])) == [42, 42]
+
+
 def test_validator():
     assert utils.make_validator('Fail', lambda: False)()    == (False, 'Fail')
     assert utils.make_validator('Fail', lambda x: x > 0)(0) == (False, 'Fail')
