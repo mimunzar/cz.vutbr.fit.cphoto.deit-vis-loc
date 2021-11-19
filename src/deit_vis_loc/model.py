@@ -115,7 +115,7 @@ def gen_evaluate_model(model, fn_img_to_tensor, list_of_anchor_imgs):
     compute_embeddings   = lambda im_path: model(fn_img_to_tensor(im_path))
     for anchor_img in list_of_anchor_imgs:
         a_embed  = compute_embeddings(anchor_img)
-        s_dists  = (torch.cdist(a_embed, compute_embeddings(s)) for s in list_of_segment_imgs)
+        s_dists  = [torch.cdist(a_embed, compute_embeddings(s)) for s in list_of_segment_imgs]
         segments = ({'path': p, 'distance': d} for p, d in zip(list_of_segment_imgs, s_dists))
         yield { 'anchor': anchor_img, 'segments': segments }
 

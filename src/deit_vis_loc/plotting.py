@@ -28,17 +28,16 @@ def by_distance(segment_iterable):
     return sorted(segment_iterable, key=op.itemgetter('distance'))
 
 
-def n_closest_segments(gen_tested, nsegments):
-    list_of_tested = list(gen_tested)
+def n_closest_segments(query_iterable, nsegments):
+    query_iterable = list(query_iterable)
     fig  = mpplt.figure(constrained_layout=True)
-    spec = fig.add_gridspec(len(list_of_tested), nsegments + 1, hspace=0.05, wspace=0.05)
+    spec = fig.add_gridspec(nrows=len(query_iterable), ncols=nsegments + 1, hspace=0.05, wspace=0.05)
 
-    for i, test in enumerate(list_of_tested):
-        _plot_img(fig.add_subplot(spec[i, 0]), test['anchor'])
-        for j, segment in zip(range(nsegments), by_distance(test['segments'])):
-            axis  = fig.add_subplot(spec[i, j + 1])
-            color = 'green' if _is_anchor_segment(test['anchor'], segment) else 'red'
-            _plot_img(axis, segment['path'], border={'color': color, 'width': 3})
+    for i, t in enumerate(query_iterable):
+        _plot_img(fig.add_subplot(spec[i, 0]), t['anchor'])
+        for j, s in zip(range(1, nsegments + 1), by_distance(t['segments'])):
+            color = 'green' if _is_anchor_segment(t['anchor'], s['path']) else 'red'
+            _plot_img(fig.add_subplot(spec[i, j]), s['path'], border={'color': color, 'width': 3})
 
 
 def _index_of_anchor_segment(anchor, segments):
@@ -46,9 +45,9 @@ def _index_of_anchor_segment(anchor, segments):
             if _is_anchor_segment(anchor, s['path']))
 
 
-def percentage_of_localized_images(gen_tested, nsegments=512):
+def percentage_of_localized_images(query_iterable, nsegments=512):
     location_rank_perc  = lambda x: x*100/nsegments
-    sorted_by_distance  = ((x['anchor'], by_distance(x['segments'])) for x in gen_tested)
+    sorted_by_distance  = ((x['anchor'], by_distance(x['segments'])) for x in query_iterable)
     anchor_segment_ids  = (_index_of_anchor_segment(*x) for x in sorted_by_distance)
     sorted_percentiles  = list(sorted(ma.ceil(location_rank_perc(x)) for x in anchor_segment_ids))
     percentile_buckets  = (list(utils.subseq(x, sorted_percentiles)) for x in range(1, 101))

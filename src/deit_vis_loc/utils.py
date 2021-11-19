@@ -27,14 +27,10 @@ def make_validator(msg, fn_valid):
     return lambda *args: (True, None) if fn_valid(*args) else (False, msg)
 
 
-def make_checker(dict_of_validators):
-    def check_dict(dict_to_check):
-        result = []
-        for k, fn_val in dict_of_validators.items():
-            success, msg = fn_val(dict_to_check[k])
-            if not success:
-                result.append(msg)
-        return result
+def make_checker(validators):
+    def check_dict(to_check):
+        vals = [fn_val(to_check[k]) for k, fn_val in validators.items()]
+        return [msg for succ, msg in vals if not succ]
     return check_dict
 
 
