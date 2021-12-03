@@ -144,6 +144,7 @@ def test(dataset_dpath, model_fpath):
     model  = torch.load(model_fpath)
     model.to(device)
 
+    memoize      = functools.lru_cache(maxsize=None)
     list_of_imgs = list(gen_anchor_imgs(dataset_dpath, 'test.txt'))
-    return test_model(model, make_embeddings(model, device), list_of_imgs)
+    return test_model(model, memoize(make_embeddings(model, device)), list_of_imgs)
 
