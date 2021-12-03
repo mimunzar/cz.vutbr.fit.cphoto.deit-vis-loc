@@ -36,11 +36,12 @@ Next specify model parameters in a JSON file. The parameters must have following
 items:
 
     {
-        "deit_model"    : "deit_tiny_patch16_224",
-        "epochs"        : 10,
-        "batch_size"    : 104,
-        "triplet_margin": 0.2,
-        "learning_rate" : 0.0001
+        "deit_model"       : "deit_tiny_patch16_224",
+        "max_epochs"       : 10,
+        "batch_size"       : 104,
+        "triplet_margin"   : 0.2,
+        "learning_rate"    : 0.0001,
+        "stopping_patience": 5
     }
 
 

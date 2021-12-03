@@ -57,3 +57,27 @@ def test_batch_all_triplet_loss():
                 torch.tensor([[0.5]])]
     #^ Same as in triplet_loss test but filters out zero losses
 
+
+def test_early_stopping():
+    is_trained = model.make_early_stoping(2)
+    assert is_trained(3) == False
+    assert is_trained(3) == False
+    assert is_trained(3) == True
+    #^ Validation loss doesn't decrease in 2 epochs
+
+    is_trained = model.make_early_stoping(2)
+    assert is_trained(3) == False
+    assert is_trained(2) == False
+    assert is_trained(1) == False
+    #^ Validation loss steadily decreases
+
+    is_trained = model.make_early_stoping(2)
+    assert is_trained(3) == False
+    assert is_trained(2) == False
+    assert is_trained(1) == False
+    assert is_trained(2) == False
+    assert is_trained(0) == False
+    assert is_trained(1) == False
+    assert is_trained(2) == True
+    #^ Validation loss changes minimum
+

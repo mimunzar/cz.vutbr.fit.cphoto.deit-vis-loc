@@ -90,6 +90,14 @@ def make_save_model(save_dpath, params):
     return save_model
 
 
+def make_early_stoping(patience):
+    losses = []
+    def early_stoping(val_loss):
+        losses.append(val_loss)
+        return patience < (len(losses) - losses.index(min(losses)))
+    return early_stoping
+
+
 def train(dataset_dpath, save_dpath, params):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     model  = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True)
@@ -98,6 +106,7 @@ def train(dataset_dpath, save_dpath, params):
     optimizer  = torch.optim.Adam(model.parameters(), params['learning_rate'])
     embeddings = make_embeddings(model, device)
     save_model = make_save_model(save_dpath, params)
+    is_trained = make_early_stoping(params['stopping_patience'])
 
     list_of_train_imgs = list(gen_anchor_imgs(dataset_dpath, 'train.txt'))
     list_of_val_imgs   = list(gen_anchor_imgs(dataset_dpath, 'val.txt'))
@@ -118,12 +127,13 @@ def train(dataset_dpath, save_dpath, params):
         utils.log('Validation loss for epoch {} is {}'.format(epoch, loss))
         return loss
 
-    gen_epoch      = ({'epoch': e + 1} for e in range(params['epochs']))
+    gen_epoch      = ({'epoch': e + 1} for e in range(params['max_epochs']))
     gen_train_loss = ({**e, **{'train_loss': train_loss(e['epoch'])}} for e in gen_epoch)
     gen_epoch_data = ({**e, **{'val_loss'  : val_loss(e['epoch'])}}   for e in gen_train_loss)
 
     for epoch_data in gen_epoch_data:
         save_model(model, epoch_data['epoch'])
+        if is_trained(epoch_data['val_loss']): break
 
     utils.log('Finished training')
 

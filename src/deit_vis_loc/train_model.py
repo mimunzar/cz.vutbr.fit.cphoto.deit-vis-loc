@@ -25,11 +25,12 @@ def parse_params(a_model_params):
     is_positive      = lambda n: 0 < n
     is_positive_int  = lambda n: isinstance(n, int) and is_positive(n)
     checker = utils.make_checker({
-        'batch_size'    : utils.make_validator('batch_size must be a positive int', is_positive_int),
-        'deit_model'    : utils.make_validator('deit_model must be a non-empty string', is_non_empty_str),
-        'epochs'        : utils.make_validator('epochs must be a positive int', is_positive_int),
-        'triplet_margin': utils.make_validator('triplet_margin must be positive', is_positive),
-        'learning_rate' : utils.make_validator('learning_rate must be positive', is_positive),
+        'batch_size'       : utils.make_validator('batch_size must be a positive int', is_positive_int),
+        'deit_model'       : utils.make_validator('deit_model must be a non-empty string', is_non_empty_str),
+        'max_epochs'       : utils.make_validator('max_epochs must be a positive int', is_positive_int),
+        'triplet_margin'   : utils.make_validator('triplet_margin must be positive', is_positive),
+        'learning_rate'    : utils.make_validator('learning_rate must be positive', is_positive),
+        'stopping_patience': utils.make_validator('stopping_patience must be positive', is_positive),
     })
     if not checker(a_model_params):
         return a_model_params
