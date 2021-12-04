@@ -59,19 +59,16 @@ def test_batch_all_triplet_loss():
 
 
 def test_early_stopping():
-    is_trained = model.make_early_stoping(2)
-    assert is_trained(3) == False
-    assert is_trained(3) == False
-    assert is_trained(3) == True
-    #^ Validation loss doesn't decrease in 2 epochs
+    is_trained = model.make_early_stoping(0, 0)
+    assert is_trained(0) == True
+    #^ Not having patience means to stop immediately
 
-    is_trained = model.make_early_stoping(2)
-    assert is_trained(3) == False
-    assert is_trained(2) == False
-    assert is_trained(1) == False
-    #^ Validation loss steadily decreases
+    is_trained = model.make_early_stoping(1, .1)
+    assert is_trained(3.00) == False
+    assert is_trained(2.91) == True
+    #^ Validation loss doesn't decrease more than delta
 
-    is_trained = model.make_early_stoping(2)
+    is_trained = model.make_early_stoping(2, 0)
     assert is_trained(3) == False
     assert is_trained(2) == False
     assert is_trained(1) == False
@@ -79,5 +76,5 @@ def test_early_stopping():
     assert is_trained(0) == False
     assert is_trained(1) == False
     assert is_trained(2) == True
-    #^ Validation loss changes minimum
+    #^ Patience over multiple losses
 

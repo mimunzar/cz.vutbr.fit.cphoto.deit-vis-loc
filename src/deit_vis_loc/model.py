@@ -5,7 +5,9 @@ import torch
 import torchvision.transforms
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-import functools
+import collections as cl
+import functools   as ft
+import itertools   as it
 import json
 import os
 import random
@@ -63,7 +65,7 @@ def train_epoch(model, optimizer, fn_embeddings, params, list_of_imgs):
 def evaluate_epoch(model, fn_embeddings, params, list_of_imgs):
     torch.set_grad_enabled(False)
     model.eval();
-    memoize  = functools.lru_cache(maxsize=None)
+    memoize  = ft.lru_cache(maxsize=None)
     gen_loss = make_batch_all_triplet_loss(memoize(fn_embeddings), params['triplet_margin'])
     #^ Saves re-computation of repeated images in triplets
     return gen_loss(gen_triplets(list_of_imgs, utils.to_segment_img))
@@ -90,11 +92,15 @@ def make_save_model(save_dpath, params):
     return save_model
 
 
-def make_early_stoping(patience):
-    losses = []
-    def early_stoping(val_loss):
-        losses.append(val_loss)
-        return patience < (len(losses) - losses.index(min(losses)))
+def make_early_stoping(patience, min_delta):
+    q_losses = cl.deque(maxlen=patience + 1)
+    le_delta = lambda l, r: l - r <= min_delta
+    def early_stoping(loss):
+        q_losses.append(loss)
+        full_queue = patience < len(q_losses)
+        rest_queue = it.islice(q_losses, 1, len(q_losses))
+        min_first  = all(it.starmap(le_delta, zip(it.repeat(q_losses[0]), rest_queue)))
+        return full_queue and min_first
     return early_stoping
 
 
@@ -106,7 +112,7 @@ def train(dataset_dpath, save_dpath, params):
     optimizer  = torch.optim.Adam(model.parameters(), params['learning_rate'])
     embeddings = make_embeddings(model, device)
     save_model = make_save_model(save_dpath, params)
-    is_trained = make_early_stoping(params['stopping_patience'])
+    is_trained = make_early_stoping(params['stopping_patience'], min_delta=0.01)
 
     list_of_train_imgs = list(gen_anchor_imgs(dataset_dpath, 'train.txt'))
     list_of_val_imgs   = list(gen_anchor_imgs(dataset_dpath, 'val.txt'))
@@ -127,9 +133,9 @@ def train(dataset_dpath, save_dpath, params):
         utils.log('Validation loss for epoch {} is {}'.format(epoch, loss))
         return loss
 
-    gen_epoch      = ({'epoch': e + 1} for e in range(params['max_epochs']))
-    gen_train_loss = ({**e, **{'train_loss': train_loss(e['epoch'])}} for e in gen_epoch)
-    gen_epoch_data = ({**e, **{'val_loss'  : val_loss(e['epoch'])}}   for e in gen_train_loss)
+    gen_epoch      = (cl.ChainMap({'epoch': e + 1}) for e in range(params['max_epochs']))
+    gen_train_loss = (cl.ChainMap({'train_loss': train_loss(e['epoch'])}) for e in gen_epoch)
+    gen_epoch_data = (cl.ChainMap({'val_loss'  : val_loss(e['epoch'])})   for e in gen_train_loss)
 
     for epoch_data in gen_epoch_data:
         save_model(model, epoch_data['epoch'])
@@ -154,7 +160,8 @@ def test(dataset_dpath, model_fpath):
     model  = torch.load(model_fpath)
     model.to(device)
 
-    memoize      = functools.lru_cache(maxsize=None)
+    memoize      = ft.lru_cache(maxsize=None)
     list_of_imgs = list(gen_anchor_imgs(dataset_dpath, 'test.txt'))
+    #^ Saves re-computation of repeated images in triplets
     return test_model(model, memoize(make_embeddings(model, device)), list_of_imgs)
 
