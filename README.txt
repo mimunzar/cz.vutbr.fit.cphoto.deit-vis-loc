@@ -23,14 +23,15 @@ Usage for Model Training [TODO]
 
 First download the GeoPose3K dataset [3].  The dataset should have the following
 structure:
+
     .
-    └── GeoPose3K_v2
-        ├── database_segments
-        ├── query_original_result
-        │   ├── test.txt
-        │   ├── train.txt
-        │   └── val.txt
-        └── query_segments_result
+    ├── database_segments
+    │   └── datasetInfoClean.csv
+    └── query_original_result
+        ├── test.txt
+        ├── train.txt
+        └── val.txt
+
 
 Next specify model parameters in a JSON file. The parameters must have following
 items:

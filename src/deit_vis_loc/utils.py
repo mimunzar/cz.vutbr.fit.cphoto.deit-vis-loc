@@ -13,6 +13,11 @@ def partition(n, iterable):
             (list(it.islice(iterable, n)) for _ in it.repeat(None)))
 
 
+def partition_by(pred, iterable):
+    i1, i2 = it.tee(iterable)
+    return (filter(pred, i1), it.filterfalse(pred, i2))
+
+
 def subseq(n, iterable):
     return it.takewhile(ft.partial(op.eq, n),
             it.dropwhile(ft.partial(op.ne, n), iterable))
@@ -20,7 +25,7 @@ def subseq(n, iterable):
 
 def to_segment_img(anchor_fpath):
     return anchor_fpath \
-        .replace('query_original_result', 'query_segments_result') \
+        .replace('query_original_result', 'rendered_segments_result') \
         .replace('.jpg', '.png')
 
 

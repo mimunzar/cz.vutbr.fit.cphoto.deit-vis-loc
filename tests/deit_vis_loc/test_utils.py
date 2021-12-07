@@ -13,6 +13,14 @@ def test_partition():
     assert list(utils.partition(1, [1, 2, 3])) == [[1], [2], [3]]
 
 
+def test_partition_by():
+    is_odd = lambda x: x % 2
+    assert list(map(list, utils.partition_by(is_odd, []))) == [[], []]
+    assert list(map(list, utils.partition_by(is_odd, [1]))) == [[1], []]
+    assert list(map(list, utils.partition_by(is_odd, [1, 2]))) == [[1], [2]]
+    assert list(map(list, utils.partition_by(is_odd, [1, 2, 3]))) == [[1, 3], [2]]
+
+
 def test_subseq():
     assert list(utils.subseq(42, [])) == []
     assert list(utils.subseq(42, [42])) == [42]

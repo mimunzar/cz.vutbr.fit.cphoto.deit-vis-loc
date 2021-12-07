@@ -3,23 +3,28 @@
 import src.deit_vis_loc.model as model
 
 import torch
-from operator import itemgetter
+import operator as op
 
 
 def test_generate_triplets():
-    fn_to_segment_path = lambda s: s + '_segment'
-    assert list(model.gen_triplets([], fn_to_segment_path)) == []
-    assert list(model.gen_triplets(['foo'], fn_to_segment_path)) == []
-    #^ No negative samples present
-    triplets = model.gen_triplets(['foo', 'bar', 'baz'], fn_to_segment_path)
-    assert sorted(triplets, key=itemgetter('anchor', 'negative')) == [
-        {'anchor': 'bar', 'positive': 'bar_segment', 'negative': 'baz_segment'},
-        {'anchor': 'bar', 'positive': 'bar_segment', 'negative': 'foo_segment'},
-        {'anchor': 'baz', 'positive': 'baz_segment', 'negative': 'bar_segment'},
-        {'anchor': 'baz', 'positive': 'baz_segment', 'negative': 'foo_segment'},
-        {'anchor': 'foo', 'positive': 'foo_segment', 'negative': 'bar_segment'},
-        {'anchor': 'foo', 'positive': 'foo_segment', 'negative': 'baz_segment'},
-    ]
+    rendered_segments = {
+        'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
+        'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
+    }
+    assert list(model.gen_triplets([], rendered_segments)) == []
+    assert list(model.gen_triplets(['foo'], rendered_segments)) == [
+            {'anchor': 'foo', 'positive': 'foo_p', 'negative': 'foo_n'},
+        ]
+
+    triplets = model.gen_triplets(['foo', 'bar'], rendered_segments)
+    assert sorted(triplets, key=op.itemgetter('anchor', 'negative')) == [
+            {'anchor': 'bar', 'positive': 'bar_p', 'negative': 'bar_n'},
+            {'anchor': 'bar', 'positive': 'bar_p', 'negative': 'foo_n'},
+            {'anchor': 'bar', 'positive': 'bar_p', 'negative': 'foo_p'},
+            {'anchor': 'foo', 'positive': 'foo_p', 'negative': 'bar_n'},
+            {'anchor': 'foo', 'positive': 'foo_p', 'negative': 'bar_p'},
+            {'anchor': 'foo', 'positive': 'foo_p', 'negative': 'foo_n'},
+        ]
 
 
 def test_triplet_loss():
