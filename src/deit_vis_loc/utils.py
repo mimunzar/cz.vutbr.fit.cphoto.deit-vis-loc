@@ -3,6 +3,7 @@
 import itertools as it
 import datetime  as dt
 import functools as ft
+import math      as ma
 import operator  as op
 
 
@@ -37,3 +38,10 @@ def make_checker(validators):
 def log(msg):
     d = dt.datetime.now(tz=dt.timezone.utc)
     print('[{}] {}'.format(d.strftime("%Y%m%dT%H%M%S"), msg))
+
+
+def circle_difference_rad(l_rad, r_rad):
+    distance = abs(l_rad - r_rad) % (2*ma.pi)
+    return 2*ma.pi - distance if distance > ma.pi else distance
+    #^ If distance is longer than half circle, there is shorter way
+

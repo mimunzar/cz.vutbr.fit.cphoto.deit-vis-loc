@@ -2,6 +2,11 @@
 
 import argparse
 import json
+<<<<<<< HEAD
+=======
+import operator as op
+import os
+>>>>>>> cb283e9 ([WIP] Computes Angle Difference)
 import sys
 
 import src.deit_vis_loc.model as model
@@ -11,16 +16,18 @@ import src.deit_vis_loc.utils as utils
 def parse_args(list_of_args):
     parser = argparse.ArgumentParser(
             description='Allows to train DeiT transformers for visual localization.')
-    parser.add_argument('-d', '--dataset_dir',
-            required=True, help='GeoPose3K dataset directory path')
-    parser.add_argument('-s', '--save_dir',
-            required=True, help='Model save directory')
-    parser.add_argument('-p', '--params',
-            required=True, help='Model params difinition file path')
+    parser.add_argument('-q', '--query_segments',
+            required=True, help='The path to file containing queries with associated segments')
+    parser.add_argument('-s', '--segments_dataset',
+            required=True, help='The path to directory containing dataset of rendered segments')
+    parser.add_argument('-t', '--train_params',
+            required=True, help='The path to file which contains definition of train params')
+    parser.add_argument('-o', '--output_dir',
+            required=True, help='The path to directory where models are saved')
     return vars(parser.parse_args(list_of_args))
 
 
-def parse_params(a_model_params):
+def parse_train_params(train_params):
     is_non_empty_str = lambda s: s.strip()
     is_positive      = lambda n: 0 < n
     is_positive_int  = lambda n: isinstance(n, int) and is_positive(n)
@@ -32,15 +39,47 @@ def parse_params(a_model_params):
         'learning_rate'    : utils.make_validator('learning_rate must be positive', is_positive),
         'stopping_patience': utils.make_validator('stopping_patience must be positive', is_positive),
     })
-    if not checker(a_model_params):
-        return a_model_params
-    print('Invalid model params ({})'.format(', '.join(checker(a_model_params))), file=sys.stderr)
+    if not checker(train_params):
+        return train_params
+    print('Invalid model params ({})'.format(', '.join(checker(train_params))), file=sys.stderr)
     sys.exit(1)
+
+
+def positive_negative_segments(query):
+    def has_similar_view_as_query(segment):
+        yaw_angle = op.itemgetter('camera_orientation', 'yaw')
+        return utils.angle_diff(yaw_angle(query), yaw_angle(segment)) <= ma.radians(30) + 1.e4
+
+    segment_names = lambda list_segments: set(s['name'] for s in list_segments)
+    p_seg, n_seg  = utils.partition_by(has_similar_view_as_query, query['segments'])
+    return {'positive': segment_names(p_seg), 'negative': segment_names(n_seg)}
+
+
+def parse_query_segments(query_records, dataset_dpath):
+    to_query_path    = lambda s: os.path.join(dataset_dpath, 'query_original_result', s) + '.jpg'
+    to_segment_path  = lambda s: os.path.join(dataset_dpath, 'database_segments', s) + '.png'
+    map_segment_path = lambda s: {k: {to_segment_path(s) for s in v} for k, v in s.items()}
+
+    pos_neg = ((k, positive_negative_segments(v)) for k, v in query_records.items())
+    return {to_query_path(k): map_segment_path(v) for k, v in pos_neg}
+
+
+def gen_query_imgs(dataset_dpath, name):
+    queries_dpath = os.path.join(dataset_dpath, 'query_original_result')
+    dataset_fpath = os.path.join(queries_dpath, name)
+    return (os.path.join(queries_dpath, l.strip()) for l in open(dataset_fpath))
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
-    with open(args['params']) as f:
-        params = parse_params(json.load(f))
-    model.train(args['dataset_dir'], args['save_dir'], params)
+    with open(args['train_params']) as f:
+        train_params = parse_train_params(json.load(f))
+    with open(args['query_segments']) as f:
+        query_segments = parse_query_segments(json.load(f), args['segments_dataset'])
+
+    query_images   = {
+        'train': list(gen_query_imgs(args['segments_dataset'], 'train.txt')),
+        'val'  : list(gen_query_imgs(args['segments_dataset'], 'val.txt')),
+    }
+    # model.train(query_images, dataset_info, model_params, args['save_dir'])
 

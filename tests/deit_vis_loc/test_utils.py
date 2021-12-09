@@ -2,6 +2,8 @@
 
 import src.deit_vis_loc.utils as utils
 
+from math import pi
+
 
 def test_partition():
     assert list(utils.partition(1, [])) == []
@@ -30,7 +32,16 @@ def test_checker():
         'foo': utils.make_validator('Failed foo', lambda x: x > 0),
         'bar': utils.make_validator('Failed bar', lambda x: x > 0),
     })
-    assert checker({ 'foo': 0, 'bar': 0, 'baz': 0 }) == ['Failed foo', 'Failed bar']
-    assert checker({ 'foo': 0, 'bar': 1, 'baz': 0 }) == ['Failed foo']
-    assert checker({ 'foo': 1, 'bar': 1, 'baz': 0 }) == []
+    assert checker({'foo': 0, 'bar': 0, 'baz': 0}) == ['Failed foo', 'Failed bar']
+    assert checker({'foo': 0, 'bar': 1, 'baz': 0}) == ['Failed foo']
+    assert checker({'foo': 1, 'bar': 1, 'baz': 0}) == []
+
+
+def test_circle_difference_rad():
+    assert utils.circle_difference_rad(2*pi, 2*pi) == 0
+    assert utils.circle_difference_rad(0,    2*pi) == 0
+    assert utils.circle_difference_rad(pi, 2*pi) == pi
+    assert utils.circle_difference_rad(2*pi, pi) == pi
+    assert utils.circle_difference_rad(0, 2*pi - pi/2) == pi/2
+    assert utils.circle_difference_rad(0,        pi/2) == pi/2
 
