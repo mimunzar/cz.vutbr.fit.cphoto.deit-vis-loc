@@ -9,6 +9,7 @@ import collections as cl
 import functools   as ft
 import itertools   as it
 import json
+import operator as op
 import os
 import random
 import time
@@ -56,13 +57,14 @@ def train_epoch(model, optimizer, fn_embeddings, params, list_queries, rendered_
             yield loss
 
 
-def evaluate_epoch(model, fn_embeddings, params, list_queries, rendered_segments):
+def evaluate_epoch(model, fn_embeddings, params, list_of_queries, rendered_segments):
     torch.set_grad_enabled(False)
     model.eval();
-    memoize  = ft.lru_cache(maxsize=None)
-    gen_loss = make_batch_all_triplet_loss(memoize(fn_embeddings), params['triplet_margin'])
+
+    embeddings = ft.lru_cache(maxsize=None)(fn_embeddings)
     #^ Saves re-computation of repeated images in triplets
-    return gen_loss(gen_triplets(list_queries, rendered_segments))
+    gen_loss   = make_batch_all_triplet_loss(embeddings, params['triplet_margin'])
+    return gen_loss(gen_triplets(list_of_queries, rendered_segments))
 
 
 def make_embeddings(model, device):
@@ -123,9 +125,9 @@ def train(query_images, rendered_segments, model_params, output_dpath):
         utils.log('Validation loss for epoch {} is {}'.format(epoch, loss))
         return loss
 
-    gen_epoch      = (cl.ChainMap({'epoch': e + 1}) for e in range(model_params['max_epochs']))
-    gen_train_loss = (cl.ChainMap({'train_loss': train_loss(e['epoch'])}) for e in gen_epoch)
-    gen_epoch_data = (cl.ChainMap({'val_loss'  : val_loss(e['epoch'])})   for e in gen_train_loss)
+    gen_epoch      = ({'epoch': e + 1} for e in range(model_params['max_epochs']))
+    gen_train_loss = ({**e, **{'train_loss': train_loss(e['epoch'])}} for e in gen_epoch)
+    gen_epoch_data = ({**e, **{'val_loss'  : val_loss(e['epoch'])}}   for e in gen_train_loss)
 
     utils.log('Started training with {}'.format(json.dumps(model_params)))
     for epoch_data in gen_epoch_data:
@@ -135,24 +137,28 @@ def train(query_images, rendered_segments, model_params, output_dpath):
     utils.log('Finished training')
 
 
-def test_model(model, fn_embeddings, list_of_query_imgs):
+def gen_test_pairs(list_of_query_imgs, rendered_segments):
+    query_segments        = lambda q: it.chain.from_iterable(rendered_segments[q].values())
+    list_of_test_segments = list(it.chain.from_iterable(map(query_segments, list_of_query_imgs)))
+    query_segment_product = it.product(list_of_query_imgs, list_of_test_segments)
+    return ((q, list(p)) for q, p in it.groupby(query_segment_product, op.itemgetter(0)))
+
+
+def test_model(model, fn_embeddings, list_of_query_imgs, rendered_segments):
     torch.set_grad_enabled(False)
     model.eval();
-    list_of_segment_imgs = [utils.to_segment_img(a) for a in list_of_query_imgs]
-    for query_img in list_of_query_imgs:
-        a_embed  = fn_embeddings(query_img)
-        s_dists  = [torch.cdist(a_embed, fn_embeddings(s)) for s in list_of_segment_imgs]
-        segments = ({'path': p, 'distance': d} for p, d in zip(list_of_segment_imgs, s_dists))
-        yield {'anchor': query_img, 'segments': segments}
+    is_positive    = lambda q, s: {'is_positive': s in rendered_segments[q]['positive']}
+    distance       = lambda l, r: {'distance': torch.cdist(fn_embeddings(l), fn_embeddings(r))}
+    build_segment  = lambda q, s: {'name': s, **distance(q, s), **is_positive(q, s)}
+    test_pairs     = gen_test_pairs(list_of_query_imgs, rendered_segments)
+    return ({'query': q, 'segments': it.starmap(build_segment, p)} for q, p in test_pairs)
 
 
-def test(dataset_dpath, model_fpath):
+def test(list_of_query_imgs, rendered_segments, model_fpath):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     model  = torch.load(model_fpath)
     model.to(device)
-
-    memoize      = ft.lru_cache(maxsize=None)
-    list_of_imgs = list(gen_query_imgs(dataset_dpath, 'test.txt'))
+    embeddings = ft.lru_cache(maxsize=None)(make_embeddings(model, device))
     #^ Saves re-computation of repeated images in triplets
-    return test_model(model, memoize(make_embeddings(model, device)), list_of_imgs)
+    return test_model(model, embeddings, list_of_query_imgs, rendered_segments)
 

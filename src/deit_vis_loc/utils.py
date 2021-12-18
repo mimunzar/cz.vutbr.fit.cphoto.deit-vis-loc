@@ -23,12 +23,6 @@ def subseq(n, iterable):
             it.dropwhile(ft.partial(op.ne, n), iterable))
 
 
-def to_segment_img(anchor_fpath):
-    return anchor_fpath \
-        .replace('query_original_result', 'rendered_segments_result') \
-        .replace('.jpg', '.png')
-
-
 def make_validator(msg, fn_valid):
     return lambda *args: (True, None) if fn_valid(*args) else (False, msg)
 
@@ -42,11 +36,11 @@ def make_checker(validators):
 
 def log(msg):
     d = dt.datetime.now(tz=dt.timezone.utc)
-    print('[{}] {}'.format(d.strftime("%Y%m%dT%H%M%S"), msg))
+    print('[{time}] {message}'.format(time=d.strftime("%Y%m%dT%H%M%S"), message=msg))
 
 
 def circle_difference_rad(l_rad, r_rad):
     distance = abs(l_rad - r_rad) % (2*ma.pi)
     return 2*ma.pi - distance if distance > ma.pi else distance
-    #^ If distance is longer than half circle, there is shorter way
+    #^ If distance is longer than half circle, there is a shorter way
 

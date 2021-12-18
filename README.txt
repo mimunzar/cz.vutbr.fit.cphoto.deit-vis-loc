@@ -38,13 +38,13 @@ items:
 
 
     {
-        "deit_model"         : "deit_tiny_patch16_224",
-        "max_epochs"         : 10,
-        "batch_size"         : 64,
-        "triplet_margin"     : 0.2,
-        "learning_rate"      : 0.0001,
-        "stopping_patience"  : 5,
-        "yaw_difference_deg" : 15
+        "deit_model"        : "deit_tiny_patch16_224",
+        "max_epochs"        : 10,
+        "batch_size"        : 64,
+        "triplet_margin"    : 0.2,
+        "learning_rate"     : 0.0001,
+        "stopping_patience" : 5,
+        "yaw_tolerance_deg" : 15
     }
 
 

@@ -20,10 +20,6 @@ def _plot_img(axis, fpath, border=None):
     axis.imshow(mpimg.imread(fpath))
 
 
-def _is_anchor_segment(anchor, segment):
-    return segment == utils.to_segment_img(anchor)
-
-
 def by_distance(segment_iterable):
     return sorted(segment_iterable, key=op.itemgetter('distance'))
 

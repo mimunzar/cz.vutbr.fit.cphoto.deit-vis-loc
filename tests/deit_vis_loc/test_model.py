@@ -83,3 +83,18 @@ def test_early_stopping():
     assert is_trained(2) == True
     #^ Patience over multiple losses
 
+
+def test_gen_test_pairs():
+    fake_rendered_segments = {
+        "q_1": {"positive": {"p_1"}, "negative": {"n_1"}},
+        "q_2": {"positive": {"p_2"}, "negative": {"n_2"}},
+    }
+    assert list(model.gen_test_pairs([], fake_rendered_segments)) == []
+    assert list(model.gen_test_pairs(['q_1'], fake_rendered_segments)) == [
+        ('q_1', [('q_1', 'p_1'), ('q_1', 'n_1')])
+    ]
+    assert list(model.gen_test_pairs(['q_1', 'q_2'], fake_rendered_segments)) == [
+        ('q_1', [('q_1', 'p_1'), ('q_1', 'n_1'), ('q_1', 'p_2'), ('q_1', 'n_2')]),
+        ('q_2', [('q_2', 'p_1'), ('q_2', 'n_1'), ('q_2', 'p_2'), ('q_2', 'n_2')]),
+    ]
+
