@@ -36,22 +36,27 @@ structure:
 Next specify model parameters in a JSON file. The parameters must have following
 items:
 
+
     {
-        "deit_model"       : "deit_tiny_patch16_224",
-        "max_epochs"       : 10,
-        "batch_size"       : 104,
-        "triplet_margin"   : 0.2,
-        "learning_rate"    : 0.0001,
-        "stopping_patience": 5
+        "deit_model"         : "deit_tiny_patch16_224",
+        "max_epochs"         : 10,
+        "batch_size"         : 64,
+        "triplet_margin"     : 0.2,
+        "learning_rate"      : 0.0001,
+        "stopping_patience"  : 5,
+        "yaw_difference_deg" : 15
     }
 
 
 Then start trainining by executing the following command:
 
-    python -m src.deit_vis_loc.train_model \
-        --dataset_dir <PATH> \
-        --save_dir    <PATH> \
-        --params      <PATH>
+
+    python -m src/deit_vis_loc/train_model \
+        --segments_dataset  <PATH> \
+        --rendered_segments <PATH> \
+        --model_params      <PATH> \
+        --output_dir        <PATH>
+
 
 
 Usage for Model Testing [TODO]
