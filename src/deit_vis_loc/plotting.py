@@ -7,7 +7,7 @@ import itertools as it
 import math      as ma
 import operator  as op
 
-import src.deit_vis_loc.utils as utils
+import src.deit_vis_loc.util as util
 
 
 def _plot_img(axis, fpath, border=None):
@@ -46,7 +46,7 @@ def percentage_of_localized_images(query_iterable, nsegments=512):
     sorted_by_distance  = ((x['anchor'], by_distance(x['segments'])) for x in query_iterable)
     anchor_segment_ids  = (_index_of_anchor_segment(*x) for x in sorted_by_distance)
     sorted_percentiles  = list(sorted(ma.ceil(location_rank_perc(x)) for x in anchor_segment_ids))
-    percentile_buckets  = (list(utils.subseq(x, sorted_percentiles)) for x in range(1, 101))
+    percentile_buckets  = (list(util.subseq(x, sorted_percentiles)) for x in range(1, 101))
     percentile_lens     = it.accumulate(len(x) for x in percentile_buckets)
     percentile_percents = [location_rank_perc(x) for x in percentile_lens]
 

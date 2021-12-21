@@ -15,7 +15,7 @@ import random
 import time
 from datetime import datetime
 
-import src.deit_vis_loc.utils as utils
+import src.deit_vis_loc.util as util
 
 
 def gen_triplets(list_of_query_imgs, rendered_segments):
@@ -51,7 +51,7 @@ def train_epoch(model, optimizer, fn_embeddings, params, list_queries, rendered_
     torch.set_grad_enabled(True)
     model.train()
     gen_loss = make_batch_all_triplet_loss(fn_embeddings, params['triplet_margin'])
-    for batch in utils.partition(params['batch_size'], list_queries):
+    for batch in util.partition(params['batch_size'], list_queries):
         for loss in gen_loss(gen_triplets(batch, rendered_segments)):
             optimizer.zero_grad(); loss.backward(); optimizer.step()
             yield loss
@@ -116,25 +116,25 @@ def train(query_images, rendered_segments, model_params, output_dpath):
         #^ Shuffle dataset so generated batches are different every time
         loss = sum_loss(train_epoch(model,
             optimizer, embeddings, model_params, query_images['train'], rendered_segments))
-        utils.log('Training loss for epoch {} is {}'.format(epoch, loss))
+        util.log('Training loss for epoch {} is {}'.format(epoch, loss))
         return loss
 
     def val_loss(epoch):
         loss = sum_loss(evaluate_epoch(model,
             embeddings, model_params, query_images['val'], rendered_segments))
-        utils.log('Validation loss for epoch {} is {}'.format(epoch, loss))
+        util.log('Validation loss for epoch {} is {}'.format(epoch, loss))
         return loss
 
     gen_epoch      = ({'epoch': e + 1} for e in range(model_params['max_epochs']))
     gen_train_loss = ({**e, **{'train_loss': train_loss(e['epoch'])}} for e in gen_epoch)
     gen_epoch_data = ({**e, **{'val_loss'  : val_loss(e['epoch'])}}   for e in gen_train_loss)
 
-    utils.log('Started training with {}'.format(json.dumps(model_params)))
+    util.log('Started training with {}'.format(json.dumps(model_params)))
     for epoch_data in gen_epoch_data:
         save_model(model, epoch_data['epoch'])
         if is_trained(epoch_data['val_loss']): break
 
-    utils.log('Finished training')
+    util.log('Finished training')
 
 
 def gen_test_pairs(list_of_query_imgs, rendered_segments):

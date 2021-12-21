@@ -5,11 +5,11 @@ import json
 import math as ma
 import os
 
-import src.deit_vis_loc.utils as utils
+import src.deit_vis_loc.util as util
 
 
 def is_circle_diff_close(tolerance_rad, l_rad, r_rad):
-    circle_diff_rad = utils.circle_difference_rad(l_rad, r_rad)
+    circle_diff_rad = util.circle_difference_rad(l_rad, r_rad)
     return circle_diff_rad <= tolerance_rad + 1e-4
     #^ Circle difference has to be lower than tolerance + precision
 
@@ -17,7 +17,7 @@ def is_circle_diff_close(tolerance_rad, l_rad, r_rad):
 def split_segments_by_yaw(tolerance_rad, yaw_angle_rad, list_of_segments):
     yaw           = lambda s: s ['camera_orientation']['yaw']
     yaw_proximity = lambda s: is_circle_diff_close(tolerance_rad, yaw_angle_rad, yaw(s))
-    return utils.partition_by(yaw_proximity, list_of_segments)
+    return util.partition_by(yaw_proximity, list_of_segments)
 
 
 def split_query_segments_by_yaw(query, yaw_tolerance_rad):

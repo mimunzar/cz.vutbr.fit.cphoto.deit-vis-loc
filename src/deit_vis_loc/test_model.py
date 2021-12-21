@@ -25,5 +25,5 @@ if __name__ == "__main__":
     args               = parse_args(sys.argv[1:])
     rendered_segments  = data.read_rendered_segments(args, args['yaw_tolerance_deg'])
     list_of_query_imgs = data.read_query_imgs(args['segments_dataset'], 'test.txt')
-    result = model.test(list_of_query_imgs, rendered_segments, args['model'])
+    test_result        = model.test(list_of_query_imgs, rendered_segments, args['model'])
 
