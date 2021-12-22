@@ -21,6 +21,12 @@ def test_partition_by():
     assert list(map(list, util.partition_by(is_odd, [1, 2, 3]))) == [[1, 3], [2]]
 
 
+def test_prepend():
+    assert list(util.prepend(1, [])) == [1]
+    assert list(util.prepend(1, [2, 3])) == [1, 2, 3]
+    assert list(util.prepend(1, iter([2, 3]))) == [1, 2, 3]
+
+
 def test_subseq():
     assert list(util.subseq(42, [])) == []
     assert list(util.subseq(42, [42])) == [42]

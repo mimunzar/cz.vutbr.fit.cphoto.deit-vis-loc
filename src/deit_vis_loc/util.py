@@ -18,6 +18,10 @@ def partition_by(pred, iterable):
     return (filter(pred, i1), it.filterfalse(pred, i2))
 
 
+def prepend(x, iterable):
+    return it.chain([x], iterable)
+
+
 def subseq(n, iterable):
     return it.takewhile(ft.partial(op.eq, n),
             it.dropwhile(ft.partial(op.ne, n), iterable))
