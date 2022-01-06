@@ -2,9 +2,7 @@
 
 import itertools as it
 import datetime  as dt
-import functools as ft
 import math      as ma
-import operator  as op
 
 
 def partition(n, iterable):
@@ -20,11 +18,6 @@ def partition_by(pred, iterable):
 
 def prepend(x, iterable):
     return it.chain([x], iterable)
-
-
-def subseq(n, iterable):
-    return it.takewhile(ft.partial(op.eq, n),
-            it.dropwhile(ft.partial(op.ne, n), iterable))
 
 
 def make_validator(msg, fn_valid):

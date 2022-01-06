@@ -27,14 +27,6 @@ def test_prepend():
     assert list(util.prepend(1, iter([2, 3]))) == [1, 2, 3]
 
 
-def test_subseq():
-    assert list(util.subseq(42, [])) == []
-    assert list(util.subseq(42, [42])) == [42]
-    assert list(util.subseq(42, [41, 42])) == [42]
-    assert list(util.subseq(42, [41, 42, 42])) == [42, 42]
-    assert list(util.subseq(42, [41, 42, 42, 43])) == [42, 42]
-
-
 def test_validator():
     assert util.make_validator('Fail', lambda: False)()    == (False, 'Fail')
     assert util.make_validator('Fail', lambda x: x > 0)(0) == (False, 'Fail')

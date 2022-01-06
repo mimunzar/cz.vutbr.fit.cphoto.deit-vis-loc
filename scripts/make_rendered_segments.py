@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 import collections as cl
 import itertools   as it
@@ -68,7 +70,8 @@ def segment_img_metadata(segment):
 
 
 def segment_metadata(dpath):
-    info_file_fpath  = os.path.join(os.path.expanduser(dpath), 'database_segments/datasetInfoClean.csv')
+    info_file_fpath  = os.path.join(
+            os.path.expanduser(dpath), 'database_segments/datasetInfoClean.csv')
     info_file_fields = cl.OrderedDict({
         'segment'   : lambda x: x + '_segments',
         'query'     : lambda x: x,
