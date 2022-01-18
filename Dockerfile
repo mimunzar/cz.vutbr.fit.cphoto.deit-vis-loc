@@ -5,9 +5,12 @@ RUN yum -y update \
 
 WORKDIR app/
 
-COPY scripts/install_environment.sh scripts/
+COPY scripts/install_conda_env.sh scripts/
 COPY environment.yml .
-RUN /bin/bash scripts/install_environment.sh environment.yml
+RUN /bin/bash scripts/install_conda_env.sh miniconda/ environment.yml
 
-CMD ["/bin/bash"]
+COPY scripts/exec_in_conda_env.sh scripts/
+COPY src/ src/
+ENTRYPOINT ["/bin/bash", "scripts/exec_in_conda_env.sh", \
+    "miniconda/", "environment.yml", "src.deit_vis_loc.train_model"]
 

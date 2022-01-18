@@ -1,0 +1,4 @@
+.*
+miniconda/
+**/__pycache__/
+

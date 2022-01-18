@@ -40,21 +40,23 @@ err() {
 }
 
 function main() {
-    local env_file="$1"
+    local install_dir="$(readlink -f $1)"
+    local env_file="$(readlink -f $2)"
+
     if [[ ! -e "${env_file}" ]]; then
         err "Failed to find Environment file (${env_file})" && exit 1
     fi
-    env_file=$(readlink -f "${env_file}")
 
-    local install_dir="$(readlink -f ./miniconda/)"
     info "Installing Miniconda to ${install_dir}"
-    local conda_bin="$(install_conda ${install_dir})"
+    local conda_bin
+    conda_bin="$(install_conda ${install_dir})"
     (( $? != 0 )) && err "Failed to install Miniconda (${conda_bin})" && exit 1
     conda_bin=$(readlink -f "${conda_bin}")
     info "Miniconda installed ${conda_bin}"
 
     info "Installing Environment from ${env_file}"
-    local conda_env=$(install_env ${env_file} ${conda_bin})
+    local conda_env
+    conda_env=$(install_env ${env_file} ${conda_bin})
     (( $? != 0 )) && err "Failed to install Environment (${conda_env})" && exit 1
     info "Environment installed ${conda_env}"
 }
