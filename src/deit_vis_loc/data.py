@@ -27,9 +27,9 @@ def split_query_segments_by_yaw(query, yaw_tolerance_rad):
     return {'positive': names_of(pos), 'negative': names_of(neg)}
 
 
-def parse_rendered_segments(rendered_segments, dataset_dpath, yaw_tolerance_rad):
+def parse_segments_metadata(segments_meta, dataset_dpath, yaw_tolerance_rad):
     split_segments   = lambda k, v: (k, split_query_segments_by_yaw(v, yaw_tolerance_rad))
-    pos_neg_segments = it.starmap(split_segments, rendered_segments.items())
+    pos_neg_segments = it.starmap(split_segments, segments_meta.items())
 
     to_query_path    = lambda s: os.path.join(dataset_dpath, 'query_original_result', s) + '.jpg'
     to_segment_path  = lambda s: os.path.join(dataset_dpath, 'database_segments', s) + '.png'
@@ -37,10 +37,10 @@ def parse_rendered_segments(rendered_segments, dataset_dpath, yaw_tolerance_rad)
     return {to_query_path(k): map_segment_path(v) for k, v in pos_neg_segments}
 
 
-def read_rendered_segments(args, yaw_tolerance_deg):
+def read_segments_metadata(args, yaw_tolerance_deg):
     tolerance_rad = ma.radians(yaw_tolerance_deg)
-    with open(args['rendered_segments']) as f:
-        return parse_rendered_segments(json.load(f), args['segments_dataset'], tolerance_rad)
+    with open(args['segments_meta']) as f:
+        return parse_segments_metadata(json.load(f), args['segments_dataset'], tolerance_rad)
 
 
 def read_query_imgs(dataset_dpath, name):

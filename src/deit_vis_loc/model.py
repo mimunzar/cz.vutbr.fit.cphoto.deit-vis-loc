@@ -18,11 +18,11 @@ from datetime import datetime
 import src.deit_vis_loc.util as util
 
 
-def gen_triplets(list_of_query_imgs, rendered_segments):
-    query_segments = lambda query: it.chain.from_iterable(rendered_segments[query].values())
+def gen_triplets(list_of_query_imgs, segments_meta):
+    query_segments = lambda query: it.chain.from_iterable(segments_meta[query].values())
     all_segments   = set(it.chain.from_iterable(map(query_segments, list_of_query_imgs)))
     def images_of_triplet(query):
-        query_pos = rendered_segments[query]['positive']
+        query_pos = segments_meta[query]['positive']
         query_neg = all_segments - query_pos
         return ([query], query_pos, query_neg)
 
@@ -47,24 +47,24 @@ def make_batch_all_triplet_loss(fn_embeddings, margin):
     return lambda list_triplets: filter(torch.is_nonzero, map(triplet_loss, list_triplets))
 
 
-def train_epoch(model, optimizer, fn_embeddings, params, list_queries, rendered_segments):
+def train_epoch(model, optimizer, fn_embeddings, params, list_queries, segments_meta):
     torch.set_grad_enabled(True)
     model.train()
     gen_loss = make_batch_all_triplet_loss(fn_embeddings, params['triplet_margin'])
     for batch in util.partition(params['batch_size'], list_queries):
-        for loss in gen_loss(gen_triplets(batch, rendered_segments)):
+        for loss in gen_loss(gen_triplets(batch, segments_meta)):
             optimizer.zero_grad(); loss.backward(); optimizer.step()
             yield loss
 
 
-def evaluate_epoch(model, fn_embeddings, params, list_of_queries, rendered_segments):
+def evaluate_epoch(model, fn_embeddings, params, list_of_queries, segments_meta):
     torch.set_grad_enabled(False)
     model.eval();
 
     embeddings = ft.lru_cache(maxsize=None)(fn_embeddings)
     #^ Saves re-computation of repeated images in triplets
     gen_loss   = make_batch_all_triplet_loss(embeddings, params['triplet_margin'])
-    return gen_loss(gen_triplets(list_of_queries, rendered_segments))
+    return gen_loss(gen_triplets(list_of_queries, segments_meta))
 
 
 def make_embeddings(model, device):
@@ -100,36 +100,36 @@ def make_early_stoping(patience, min_delta):
     return early_stoping
 
 
-def train(query_images, rendered_segments, model_params, output_dpath):
+def train(query_images, segments_meta, train_params, output_dpath):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    model  = torch.hub.load('facebookresearch/deit:main', model_params['deit_model'], pretrained=True)
+    model  = torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True)
     model.to(device)
 
-    optimizer  = torch.optim.Adam(model.parameters(), model_params['learning_rate'])
+    optimizer  = torch.optim.Adam(model.parameters(), train_params['learning_rate'])
     embeddings = make_embeddings(model, device)
-    save_model = make_save_model(output_dpath, model_params)
-    is_trained = make_early_stoping(model_params['stopping_patience'], min_delta=0.01)
+    save_model = make_save_model(output_dpath, train_params)
+    is_trained = make_early_stoping(train_params['stopping_patience'], min_delta=0.01)
     sum_loss   = lambda gen_loss: torch.sum(torch.stack(list(gen_loss)))
 
     def train_loss(epoch):
         random.shuffle(query_images['train'])
         #^ Shuffle dataset so generated batches are different every time
         loss = sum_loss(train_epoch(model,
-            optimizer, embeddings, model_params, query_images['train'], rendered_segments))
+            optimizer, embeddings, train_params, query_images['train'], segments_meta))
         util.log('Training loss for epoch {} is {}'.format(epoch, loss))
         return loss
 
     def val_loss(epoch):
         loss = sum_loss(evaluate_epoch(model,
-            embeddings, model_params, query_images['val'], rendered_segments))
+            embeddings, train_params, query_images['val'], segments_meta))
         util.log('Validation loss for epoch {} is {}'.format(epoch, loss))
         return loss
 
-    gen_epoch      = ({'epoch': e + 1} for e in range(model_params['max_epochs']))
+    gen_epoch      = ({'epoch': e + 1} for e in range(train_params['max_epochs']))
     gen_train_loss = ({**e, **{'train_loss': train_loss(e['epoch'])}} for e in gen_epoch)
     gen_epoch_data = ({**e, **{'val_loss'  : val_loss(e['epoch'])}}   for e in gen_train_loss)
 
-    util.log('Started training with {}'.format(json.dumps(model_params)))
+    util.log('Started training with {} on {}'.format(json.dumps(train_params), device))
     for epoch_data in gen_epoch_data:
         save_model(model, epoch_data['epoch'])
         if is_trained(epoch_data['val_loss']): break
@@ -137,28 +137,28 @@ def train(query_images, rendered_segments, model_params, output_dpath):
     util.log('Finished training')
 
 
-def gen_test_pairs(list_of_query_imgs, rendered_segments):
-    query_segments        = lambda q: it.chain.from_iterable(rendered_segments[q].values())
+def gen_test_pairs(list_of_query_imgs, segments_meta):
+    query_segments        = lambda q: it.chain.from_iterable(segments_meta[q].values())
     list_of_test_segments = list(it.chain.from_iterable(map(query_segments, list_of_query_imgs)))
     query_segment_product = it.product(list_of_query_imgs, list_of_test_segments)
     return ((q, list(p)) for q, p in it.groupby(query_segment_product, op.itemgetter(0)))
 
 
-def test_model(model, fn_embeddings, list_of_query_imgs, rendered_segments):
+def test_model(model, fn_embeddings, list_of_query_imgs, segments_meta):
     torch.set_grad_enabled(False)
     model.eval();
-    is_positive    = lambda q, s: {'is_positive': s in rendered_segments[q]['positive']}
+    is_positive    = lambda q, s: {'is_positive': s in segments_meta[q]['positive']}
     distance       = lambda l, r: {'distance': torch.cdist(fn_embeddings(l), fn_embeddings(r))}
     build_segment  = lambda q, s: {'name': s, **distance(q, s), **is_positive(q, s)}
-    test_pairs     = gen_test_pairs(list_of_query_imgs, rendered_segments)
+    test_pairs     = gen_test_pairs(list_of_query_imgs, segments_meta)
     return ({'query': q, 'segments': it.starmap(build_segment, p)} for q, p in test_pairs)
 
 
-def test(list_of_query_imgs, rendered_segments, model_fpath):
+def test(list_of_query_imgs, segments_meta, model_fpath):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     model  = torch.load(model_fpath)
     model.to(device)
     embeddings = ft.lru_cache(maxsize=None)(make_embeddings(model, device))
     #^ Saves re-computation of repeated images in triplets
-    return test_model(model, embeddings, list_of_query_imgs, rendered_segments)
+    return test_model(model, embeddings, list_of_query_imgs, segments_meta)
 

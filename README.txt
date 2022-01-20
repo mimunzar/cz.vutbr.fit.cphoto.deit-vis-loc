@@ -21,8 +21,8 @@ command:
 Usage for Model Training [TODO]
 -------------------------------
 
-First download the GeoPose3K dataset [3].  The dataset should have the following
-structure:
+First download the GeoPose3K  dataset  [TODO].   The  dataset  should  have  the
+following structure:
 
     .
     ├── database_segments
@@ -35,7 +35,6 @@ structure:
 
 Next specify model parameters in a JSON file. The parameters must have following
 items:
-
 
     {
         "deit_model"        : "deit_tiny_patch16_224",
@@ -50,21 +49,21 @@ items:
 
 Then start trainining by executing the following command:
 
-
     python -m src/deit_vis_loc/train_model \
-        --segments_dataset  <PATH> \
-        --rendered_segments <PATH> \
-        --model_params      <PATH> \
-        --output_dir        <PATH>
-
+        --segments_dataset <PATH> \
+        --segments_meta    <PATH> \
+        --train_params     <PATH> \
+        --output           <PATH>
 
 
 Usage for Model Testing [TODO]
 ------------------------------
 
     python -m src.deit_vis_loc.test_model \
-        --dataset_dir <PATH> \
-        --model       <PATH>
+        --segments_dataset  <PATH> \
+        --segments_meta     <PATH> \
+        --model             <PATH> \
+        --yaw_tolerance_deg <INT>
 
 
 Tests
@@ -75,6 +74,9 @@ Tests
 
 Possible Improvements [TODO]
 ----------------------------
+
+    - Support other transformer models
+    - Support different loss functions
 
 
 References
