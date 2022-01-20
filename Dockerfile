@@ -11,6 +11,5 @@ RUN /bin/bash scripts/install_conda_env.sh miniconda/ environment.yml
 
 COPY scripts/exec_in_conda_env.sh scripts/
 COPY src/ src/
-ENTRYPOINT ["/bin/bash", "scripts/exec_in_conda_env.sh", \
-    "miniconda/", "environment.yml", "src.deit_vis_loc.train_model"]
+ENTRYPOINT ["/bin/bash", "scripts/exec_in_conda_env.sh", "miniconda/", "environment.yml"]
 
