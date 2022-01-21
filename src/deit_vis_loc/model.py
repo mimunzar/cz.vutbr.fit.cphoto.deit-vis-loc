@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 
-import torch
-import torchvision.transforms
-from PIL import Image
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-
 import collections as cl
 import functools   as ft
 import itertools   as it
 import json
 import operator as op
 import os
-import random
+import random as ra
 import time
 from datetime import datetime
+
+import torch
+import torch.cuda
+import torchvision.transforms
+from PIL import Image
+from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import src.deit_vis_loc.util as util
 
@@ -100,6 +101,10 @@ def make_early_stoping(patience, min_delta):
     return early_stoping
 
 
+def device_name(device):
+    return 'cpu' if 'cpu' == device else torch.cuda.get_device_name(device)
+
+
 def train(query_images, segments_meta, train_params, output_dpath):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     model  = torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True)
@@ -112,10 +117,10 @@ def train(query_images, segments_meta, train_params, output_dpath):
     sum_loss   = lambda gen_loss: torch.sum(torch.stack(list(gen_loss)))
 
     def train_loss(epoch):
-        random.shuffle(query_images['train'])
+        query_it = ra.sample(query_images['train'], k=len(query_images['train']))
         #^ Shuffle dataset so generated batches are different every time
         loss = sum_loss(train_epoch(model,
-            optimizer, embeddings, train_params, query_images['train'], segments_meta))
+            optimizer, embeddings, train_params, query_it, segments_meta))
         util.log('Training loss for epoch {} is {}'.format(epoch, loss))
         return loss
 
@@ -129,12 +134,15 @@ def train(query_images, segments_meta, train_params, output_dpath):
     gen_train_loss = ({**e, **{'train_loss': train_loss(e['epoch'])}} for e in gen_epoch)
     gen_epoch_data = ({**e, **{'val_loss'  : val_loss(e['epoch'])}}   for e in gen_train_loss)
 
-    util.log('Started training with {} on {}'.format(json.dumps(train_params), device))
+    util.log('Started training on "{}" with {}'.format(
+        device_name(device), json.dumps(train_params, indent=4)))
     for epoch_data in gen_epoch_data:
         save_model(model, epoch_data['epoch'])
-        if is_trained(epoch_data['val_loss']): break
+        if is_trained(epoch_data['val_loss']):
+            best = epoch_data['epoch'] - train_params['stopping_patience']
+            util.log('Finished training with best model in {} epoch'.format(best))
+            break
 
-    util.log('Finished training')
 
 
 def gen_test_pairs(list_of_query_imgs, segments_meta):

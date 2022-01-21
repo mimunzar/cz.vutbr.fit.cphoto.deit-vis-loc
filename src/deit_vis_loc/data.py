@@ -4,6 +4,7 @@ import itertools as it
 import json
 import math as ma
 import os
+import sys
 
 import src.deit_vis_loc.util as util
 
@@ -46,5 +47,30 @@ def read_segments_metadata(args, yaw_tolerance_deg):
 def read_query_imgs(dataset_dpath, name):
     queries_dpath = os.path.join(dataset_dpath, 'query_original_result')
     dataset_fpath = os.path.join(queries_dpath, name)
-    return [os.path.join(queries_dpath, l.strip()) for l in open(dataset_fpath)]
+    return (os.path.join(queries_dpath, l.strip()) for l in open(dataset_fpath))
+
+
+def parse_train_params(train_params):
+    is_non_empty_str = lambda s: s.strip()
+    is_positive      = lambda n: 0 < n
+    is_int           = lambda n: isinstance(n, int)
+    is_positive_int  = lambda n: is_int(n) and is_positive(n)
+    checker = util.make_checker({
+        'batch_size'        : util.make_validator('batch_size must be a positive int', is_positive_int),
+        'deit_model'        : util.make_validator('deit_model must be a non-empty string', is_non_empty_str),
+        'max_epochs'        : util.make_validator('max_epochs must be a positive int', is_positive_int),
+        'triplet_margin'    : util.make_validator('triplet_margin must be positive', is_positive),
+        'learning_rate'     : util.make_validator('learning_rate must be positive', is_positive),
+        'stopping_patience' : util.make_validator('stopping_patience must be positive', is_positive),
+        'yaw_tolerance_deg' : util.make_validator('yaw_tolerance_deg must be an int', is_int),
+    })
+    if not checker(train_params):
+        return train_params
+    print('Invalid model params ({})'.format(', '.join(checker(train_params))), file=sys.stderr)
+    sys.exit(1)
+
+
+def read_train_params(fpath):
+    with open(fpath) as f:
+        return parse_train_params(json.load(f))
 

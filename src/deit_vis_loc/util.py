@@ -20,6 +20,10 @@ def prepend(x, iterable):
     return it.chain([x], iterable)
 
 
+def take(n, iterable):
+    return it.islice(iterable, n)
+
+
 def make_validator(msg, fn_valid):
     return lambda *args: (True, None) if fn_valid(*args) else (False, msg)
 

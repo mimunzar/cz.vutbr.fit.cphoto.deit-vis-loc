@@ -27,6 +27,13 @@ def test_prepend():
     assert list(util.prepend(1, iter([2, 3]))) == [1, 2, 3]
 
 
+def test_take():
+    assert list(util.take(3, [])) == []
+    assert list(util.take(0, [1, 2, 3])) == []
+    assert list(util.take(2, [1, 2, 3])) == [1, 2]
+    assert list(util.take(None, [1, 2, 3])) == [1, 2, 3]
+
+
 def test_validator():
     assert util.make_validator('Fail', lambda: False)()    == (False, 'Fail')
     assert util.make_validator('Fail', lambda x: x > 0)(0) == (False, 'Fail')
