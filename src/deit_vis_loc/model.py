@@ -101,6 +101,12 @@ def make_early_stoping(patience, min_delta):
     return early_stoping
 
 
+def tensor_sum(device, tensor_it):
+    tensor_it = util.prepend(torch.zeros((1, 1), device=device), tensor_it)
+    #^ Torch sum can't handle an empty sequence, prepend a default value
+    return torch.sum(torch.cat(tuple(tensor_it)))
+
+
 def device_name(device):
     return 'cpu' if 'cpu' == device else torch.cuda.get_device_name(device)
 
@@ -114,18 +120,17 @@ def train(query_images, segments_meta, train_params, output_dpath):
     embeddings = make_embeddings(model, device)
     save_model = make_save_model(output_dpath, train_params)
     is_trained = make_early_stoping(train_params['stopping_patience'], min_delta=0.01)
-    sum_loss   = lambda gen_loss: torch.sum(torch.stack(list(gen_loss)))
 
     def train_loss(epoch):
         query_it = ra.sample(query_images['train'], k=len(query_images['train']))
         #^ Shuffle dataset so generated batches are different every time
-        loss = sum_loss(train_epoch(model,
+        loss = tensor_sum(device, train_epoch(model,
             optimizer, embeddings, train_params, query_it, segments_meta))
         util.log('Training loss for epoch {} is {}'.format(epoch, loss))
         return loss
 
     def val_loss(epoch):
-        loss = sum_loss(evaluate_epoch(model,
+        loss = tensor_sum(device, evaluate_epoch(model,
             embeddings, train_params, query_images['val'], segments_meta))
         util.log('Validation loss for epoch {} is {}'.format(epoch, loss))
         return loss
@@ -142,7 +147,6 @@ def train(query_images, segments_meta, train_params, output_dpath):
             best = epoch_data['epoch'] - train_params['stopping_patience']
             util.log('Finished training with best model in {} epoch'.format(best))
             break
-
 
 
 def gen_test_pairs(list_of_query_imgs, segments_meta):

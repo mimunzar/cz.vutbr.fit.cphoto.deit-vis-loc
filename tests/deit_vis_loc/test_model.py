@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-import src.deit_vis_loc.model as model
-
-import torch
 import operator as op
+import torch
+
+import src.deit_vis_loc.model as model
 
 
 def test_generate_triplets():
@@ -97,4 +97,11 @@ def test_gen_test_pairs():
         ('q_1', [('q_1', 'p_1'), ('q_1', 'n_1'), ('q_1', 'p_2'), ('q_1', 'n_2')]),
         ('q_2', [('q_2', 'p_1'), ('q_2', 'n_1'), ('q_2', 'p_2'), ('q_2', 'n_2')]),
     ]
+
+
+def test_tensor_sum():
+    o = torch.ones(1, 1)
+    assert model.tensor_sum('cpu', [])     == torch.tensor(0)
+    assert model.tensor_sum('cpu', [o])    == torch.tensor(1)
+    assert model.tensor_sum('cpu', [o, o]) == torch.tensor(2)
 
