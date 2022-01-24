@@ -31,12 +31,14 @@ install_env() {
     echo $(head -n1 ${env_file} | cut -d' ' -f2)
 }
 
+DATE_FORMAT='+%Y-%m-%dT%H:%M:%S'
+
 info() {
-    echo "[INFO][$(date +'%Y-%m-%dT%H:%M:%S')]: $*"
+    echo "[INFO][$(date ${DATE_FORMAT})]: $*"
 }
 
 err() {
-    echo "[ERROR][$(date +'%Y-%m-%dT%H:%M:%S')]: $*" >&2
+    echo "[ERROR][$(date ${DATE_FORMAT})]: $*" >&2
 }
 
 main() {
@@ -45,6 +47,10 @@ main() {
 
     if [[ ! -e "${env_file}" ]]; then
         err "Failed to find Environment file (${env_file})" && exit 1
+    fi
+
+    if [[ -d ${install_dir} ]]; then
+        info "Found Miniconda installation at ${install_dir}" && exit 0
     fi
 
     info "Installing Miniconda to ${install_dir}"

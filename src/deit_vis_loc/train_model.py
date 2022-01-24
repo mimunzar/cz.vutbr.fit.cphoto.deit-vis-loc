@@ -5,7 +5,7 @@ import sys
 
 import src.deit_vis_loc.data  as data
 import src.deit_vis_loc.model as model
-import src.deit_vis_loc.util as util
+import src.deit_vis_loc.util  as util
 
 
 def parse_args(args_it):
