@@ -3,6 +3,8 @@
 import argparse
 import sys
 
+from safe_gpu import safe_gpu
+
 import src.deit_vis_loc.data  as data
 import src.deit_vis_loc.model as model
 import src.deit_vis_loc.util  as util
@@ -25,6 +27,7 @@ def parse_args(args_it):
 
 
 if __name__ == "__main__":
+    gpu_owner     = safe_gpu.GPUOwner()
     args          = parse_args(sys.argv[1:])
     train_params  = data.read_train_params(args['train_params'])
     segments_meta = data.read_segments_metadata(args, train_params['yaw_tolerance_deg'])
