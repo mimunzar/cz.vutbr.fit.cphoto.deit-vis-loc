@@ -1,5 +1,6 @@
 #!/bin/bash
 
+unset PYTHONHOME
 
 INSTALL_DIR="$(readlink -f $1)"
 source ${INSTALL_DIR}/etc/profile.d/conda.sh
