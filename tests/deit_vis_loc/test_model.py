@@ -1,22 +1,42 @@
 #!/usr/bin/env python3
 
-import operator as op
+import functools as ft
+import operator  as op
+
+import pytest
 import torch
 
 import src.deit_vis_loc.model as model
 
 
-def test_generate_triplets():
-    rendered_segments = {
+def test_make_qpn():
+    meta = {
+        'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
+    }
+    qpn  = model.make_qpn(meta, meta.keys())
+    assert qpn('foo') == ({'foo'}, {'foo_p'}, {'foo_n'})
+    with pytest.raises(KeyError): qpn('bar')
+
+    meta = {
         'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
         'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
     }
-    assert list(model.gen_triplets([], rendered_segments)) == []
-    assert list(model.gen_triplets(['foo'], rendered_segments)) == [
+    qpn  = model.make_qpn(meta, meta.keys())
+    assert qpn('foo') == ({'foo'}, {'foo_p'}, {'bar_p', 'bar_n', 'foo_n'})
+    assert qpn('bar') == ({'bar'}, {'bar_p'}, {'foo_p', 'foo_n', 'bar_n'})
+
+
+def test_iter_triplets():
+    meta = {
+        'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
+        'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
+    }
+    assert list(model.iter_triplets(meta, [])) == []
+    assert list(model.iter_triplets(meta, ['foo'])) == [
             {'anchor': 'foo', 'positive': 'foo_p', 'negative': 'foo_n'},
         ]
 
-    triplets = model.gen_triplets(['foo', 'bar'], rendered_segments)
+    triplets = model.iter_triplets(meta, ['foo', 'bar'])
     assert sorted(triplets, key=op.itemgetter('anchor', 'negative')) == [
             {'anchor': 'bar', 'positive': 'bar_p', 'negative': 'bar_n'},
             {'anchor': 'bar', 'positive': 'bar_p', 'negative': 'foo_n'},
@@ -28,29 +48,29 @@ def test_generate_triplets():
 
 
 def test_triplet_loss():
-    l = model.make_triplet_loss(lambda x: x, margin=0)
     z = torch.zeros(1, 1)
     o = torch.ones (1, 1)
-    assert l({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.]])
-    assert l({'anchor': z, 'positive': z, 'negative': o}) == torch.tensor([[0.]])
-    assert l({'anchor': z, 'positive': o, 'negative': z}) == torch.tensor([[1.]])
-    assert l({'anchor': z, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
-    assert l({'anchor': o, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
+    loss = ft.partial(model.triplet_loss, lambda x: x, 0)
+    assert loss({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.]])
+    assert loss({'anchor': z, 'positive': z, 'negative': o}) == torch.tensor([[0.]])
+    assert loss({'anchor': z, 'positive': o, 'negative': z}) == torch.tensor([[1.]])
+    assert loss({'anchor': z, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
+    assert loss({'anchor': o, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
 
-    l = model.make_triplet_loss(lambda x: x, margin=0.5)
-    assert l({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.5]])
-    assert l({'anchor': z, 'positive': z, 'negative': o}) == torch.tensor([[0.]])
-    assert l({'anchor': z, 'positive': o, 'negative': z}) == torch.tensor([[1.5]])
-    assert l({'anchor': z, 'positive': o, 'negative': o}) == torch.tensor([[0.5]])
-    assert l({'anchor': o, 'positive': o, 'negative': o}) == torch.tensor([[0.5]])
+    loss = ft.partial(model.triplet_loss, lambda x: x, 0.5)
+    assert loss({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.5]])
+    assert loss({'anchor': z, 'positive': z, 'negative': o}) == torch.tensor([[0.]])
+    assert loss({'anchor': z, 'positive': o, 'negative': z}) == torch.tensor([[1.5]])
+    assert loss({'anchor': z, 'positive': o, 'negative': o}) == torch.tensor([[0.5]])
+    assert loss({'anchor': o, 'positive': o, 'negative': o}) == torch.tensor([[0.5]])
 
 
-def test_batch_all_triplet_loss():
-    gen_l = model.make_batch_all_triplet_loss(lambda x: x, margin=0.5)
-    z = torch.zeros(1, 1)
-    o = torch.ones (1, 1)
-    assert list(gen_l([])) == []
-    assert list(gen_l([
+def test_iter_triplet_loss():
+    z       = torch.zeros(1, 1)
+    o       = torch.ones (1, 1)
+    loss_it = model.make_iter_triplet_loss(lambda x: x, margin=0.5)
+    assert list(loss_it([])) == []
+    assert list(loss_it([
             {'anchor': z, 'positive': z, 'negative': z},
             {'anchor': z, 'positive': z, 'negative': o},
             {'anchor': z, 'positive': o, 'negative': z},
@@ -89,19 +109,12 @@ def test_gen_test_pairs():
         "q_1": {"positive": {"p_1"}, "negative": {"n_1"}},
         "q_2": {"positive": {"p_2"}, "negative": {"n_2"}},
     }
-    assert list(model.gen_test_pairs([], fake_rendered_segments)) == []
-    assert list(model.gen_test_pairs(['q_1'], fake_rendered_segments)) == [
+    assert list(model.iter_test_pairs([], fake_rendered_segments)) == []
+    assert list(model.iter_test_pairs(['q_1'], fake_rendered_segments)) == [
         ('q_1', [('q_1', 'p_1'), ('q_1', 'n_1')])
     ]
-    assert list(model.gen_test_pairs(['q_1', 'q_2'], fake_rendered_segments)) == [
+    assert list(model.iter_test_pairs(['q_1', 'q_2'], fake_rendered_segments)) == [
         ('q_1', [('q_1', 'p_1'), ('q_1', 'n_1'), ('q_1', 'p_2'), ('q_1', 'n_2')]),
         ('q_2', [('q_2', 'p_1'), ('q_2', 'n_1'), ('q_2', 'p_2'), ('q_2', 'n_2')]),
     ]
-
-
-def test_tensor_sum():
-    o = torch.ones(1, 1)
-    assert model.tensor_sum('cpu', [])     == torch.tensor(0)
-    assert model.tensor_sum('cpu', [o])    == torch.tensor(1)
-    assert model.tensor_sum('cpu', [o, o]) == torch.tensor(2)
 

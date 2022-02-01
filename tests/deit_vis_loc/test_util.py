@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 
+from math import pi
+
 import src.deit_vis_loc.util as util
 
-from math import pi
 
 
 def test_partition():
     assert list(util.partition(1, [])) == []
     assert list(util.partition(4, [1, 2, 3])) == []
-    assert list(util.partition(3, [1, 2, 3])) == [[1, 2, 3]]
-    assert list(util.partition(2, [1, 2, 3])) == [[1, 2]]
-    assert list(util.partition(1, [1, 2, 3])) == [[1], [2], [3]]
+    assert list(util.partition(3, [1, 2, 3])) == [(1, 2, 3)]
+    assert list(util.partition(2, [1, 2, 3])) == [(1, 2)]
+    assert list(util.partition(1, [1, 2, 3])) == [(1,), (2,), (3,)]
 
 
 def test_partition_by():
@@ -32,6 +33,13 @@ def test_take():
     assert list(util.take(0, [1, 2, 3])) == []
     assert list(util.take(2, [1, 2, 3])) == [1, 2]
     assert list(util.take(None, [1, 2, 3])) == [1, 2, 3]
+
+
+def test_flatten():
+    assert list(util.flatten([])) == []
+    assert list(util.flatten([[1, 2, 3]])) == [1, 2, 3]
+    assert list(util.flatten([[1], [2, 3]])) == [1, 2, 3]
+    assert list(util.flatten([[[1, 2, 3]]])) == [[1, 2, 3]]
 
 
 def test_validator():

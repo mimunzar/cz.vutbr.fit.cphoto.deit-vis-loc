@@ -8,7 +8,7 @@ import math      as ma
 def partition(n, iterable):
     iterable = iter(iterable)
     return it.takewhile(lambda l: len(l) == n,
-            (list(it.islice(iterable, n)) for _ in it.repeat(None)))
+            (tuple(it.islice(iterable, n)) for _ in it.repeat(None)))
 
 
 def partition_by(pred, iterable):
@@ -22,6 +22,10 @@ def prepend(x, iterable):
 
 def take(n, iterable):
     return it.islice(iterable, n)
+
+
+def flatten(iterable):
+    return it.chain.from_iterable(iterable)
 
 
 def make_validator(msg, fn_valid):
