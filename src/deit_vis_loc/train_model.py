@@ -27,14 +27,14 @@ def parse_args(args_it):
 
 
 if __name__ == "__main__":
-    gpu_owner     = safe_gpu.GPUOwner()
-    args          = parse_args(sys.argv[1:])
-    train_params  = data.read_train_params(args['train_params'])
-    segments_meta = data.read_segments_metadata(args, train_params['yaw_tolerance_deg'])
-    iter_queries  = lambda f: data.read_query_imgs(args['segments_dataset'], f)
-    query_images  = {
-        'train': list(util.take(args['dataset_size'], iter_queries('train.txt'))),
-        'val'  : list(util.take(args['dataset_size'], iter_queries('val.txt'))),
+    gpu_owner    = safe_gpu.GPUOwner()
+    args         = parse_args(sys.argv[1:])
+    train_params = data.read_train_params(args['train_params'])
+    queries_meta = data.read_queries_metadata(args, train_params['yaw_tolerance_deg'])
+    iter_queries = lambda f: data.read_query_imgs(args['segments_dataset'], f)
+    query_images = {
+        'train': set(util.take(args['dataset_size'], iter_queries('train.txt'))),
+        'val'  : set(util.take(args['dataset_size'], iter_queries('val.txt'))),
     }
-    model.train(query_images, segments_meta, train_params, args['output'])
+    model.train(query_images, queries_meta, train_params, args['output'])
 

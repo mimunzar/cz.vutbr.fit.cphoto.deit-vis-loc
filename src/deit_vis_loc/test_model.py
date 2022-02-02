@@ -24,9 +24,9 @@ def parse_args(list_of_args):
 
 
 if __name__ == "__main__":
-    gpu_owner          = safe_gpu.GPUOwner()
-    args               = parse_args(sys.argv[1:])
-    rendered_segments  = data.read_segments_metadata(args, args['yaw_tolerance_deg'])
-    list_of_query_imgs = list(data.read_query_imgs(args['segments_dataset'], 'test.txt'))
-    test_result        = model.test(list_of_query_imgs, rendered_segments, args['model'])
+    gpu_owner    = safe_gpu.GPUOwner()
+    args         = parse_args(sys.argv[1:])
+    queries_meta = data.read_queries_metadata(args, args['yaw_tolerance_deg'])
+    queries_it   = set(data.read_query_imgs(args['segments_dataset'], 'test.txt'))
+    test_result  = model.test(queries_meta, queries_it, args['model'])
 

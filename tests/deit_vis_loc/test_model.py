@@ -10,33 +10,33 @@ import src.deit_vis_loc.model as model
 
 
 def test_make_qpn():
-    meta = {
+    queries_meta = {
         'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
     }
-    qpn  = model.make_qpn(meta, meta.keys())
+    qpn  = model.make_qpn(queries_meta, queries_meta.keys())
     assert qpn('foo') == ({'foo'}, {'foo_p'}, {'foo_n'})
     with pytest.raises(KeyError): qpn('bar')
 
-    meta = {
+    queries_meta = {
         'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
         'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
     }
-    qpn  = model.make_qpn(meta, meta.keys())
+    qpn  = model.make_qpn(queries_meta, queries_meta.keys())
     assert qpn('foo') == ({'foo'}, {'foo_p'}, {'bar_p', 'bar_n', 'foo_n'})
     assert qpn('bar') == ({'bar'}, {'bar_p'}, {'foo_p', 'foo_n', 'bar_n'})
 
 
 def test_iter_triplets():
-    meta = {
+    queries_meta = {
         'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
         'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
     }
-    assert list(model.iter_triplets(meta, [])) == []
-    assert list(model.iter_triplets(meta, ['foo'])) == [
+    assert list(model.iter_triplets(queries_meta, [])) == []
+    assert list(model.iter_triplets(queries_meta, ['foo'])) == [
             {'anchor': 'foo', 'positive': 'foo_p', 'negative': 'foo_n'},
         ]
 
-    triplets = model.iter_triplets(meta, ['foo', 'bar'])
+    triplets = model.iter_triplets(queries_meta, ['foo', 'bar'])
     assert sorted(triplets, key=op.itemgetter('anchor', 'negative')) == [
             {'anchor': 'bar', 'positive': 'bar_p', 'negative': 'bar_n'},
             {'anchor': 'bar', 'positive': 'bar_p', 'negative': 'foo_n'},
@@ -104,17 +104,17 @@ def test_early_stopping():
     #^ Patience over multiple losses
 
 
-def test_gen_test_pairs():
-    fake_rendered_segments = {
-        "q_1": {"positive": {"p_1"}, "negative": {"n_1"}},
-        "q_2": {"positive": {"p_2"}, "negative": {"n_2"}},
+def test_iter_test_pairs():
+    queries_meta = {
+        'q_1': {'positive': {'p_1'}, 'negative': {'n_1'}},
+        'q_2': {'positive': {'p_2'}, 'negative': {'n_2'}},
     }
-    assert list(model.iter_test_pairs([], fake_rendered_segments)) == []
-    assert list(model.iter_test_pairs(['q_1'], fake_rendered_segments)) == [
-        ('q_1', [('q_1', 'p_1'), ('q_1', 'n_1')])
+    assert list(model.iter_test_pairs(queries_meta, [])) == []
+    assert list(model.iter_test_pairs(queries_meta, ['q_1'])) == [
+        ('q_1', {('q_1', 'n_1'), ('q_1', 'p_1')})
     ]
-    assert list(model.iter_test_pairs(['q_1', 'q_2'], fake_rendered_segments)) == [
-        ('q_1', [('q_1', 'p_1'), ('q_1', 'n_1'), ('q_1', 'p_2'), ('q_1', 'n_2')]),
-        ('q_2', [('q_2', 'p_1'), ('q_2', 'n_1'), ('q_2', 'p_2'), ('q_2', 'n_2')]),
+    assert list(model.iter_test_pairs(queries_meta, ['q_1', 'q_2'])) == [
+        ('q_1', {('q_1', 'n_1'), ('q_1', 'n_2'), ('q_1', 'p_1'), ('q_1', 'p_2')}),
+        ('q_2', {('q_2', 'n_1'), ('q_2', 'n_2'), ('q_2', 'p_1'), ('q_2', 'p_2')}),
     ]
 

@@ -28,7 +28,7 @@ def split_query_segments_by_yaw(query, yaw_tolerance_rad):
     return {'positive': names_of(pos), 'negative': names_of(neg)}
 
 
-def parse_segments_metadata(segments_meta, dataset_dpath, yaw_tolerance_rad):
+def parse_queries_metadata(segments_meta, dataset_dpath, yaw_tolerance_rad):
     split_segments   = lambda k, v: (k, split_query_segments_by_yaw(v, yaw_tolerance_rad))
     pos_neg_segments = it.starmap(split_segments, segments_meta.items())
 
@@ -38,10 +38,10 @@ def parse_segments_metadata(segments_meta, dataset_dpath, yaw_tolerance_rad):
     return {to_query_path(k): map_segment_path(v) for k, v in pos_neg_segments}
 
 
-def read_segments_metadata(args, yaw_tolerance_deg):
+def read_queries_metadata(args, yaw_tolerance_deg):
     tolerance_rad = ma.radians(yaw_tolerance_deg)
     with open(args['segments_meta']) as f:
-        return parse_segments_metadata(json.load(f), args['segments_dataset'], tolerance_rad)
+        return parse_queries_metadata(json.load(f), args['segments_dataset'], tolerance_rad)
 
 
 def read_query_imgs(dataset_dpath, name):

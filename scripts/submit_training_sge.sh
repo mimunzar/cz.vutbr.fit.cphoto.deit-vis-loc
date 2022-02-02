@@ -4,7 +4,7 @@
 #$ -N deit_vis_loc
 #$ -l ram_free=6G,mem_free=6G
 #$ -l gpu=1,gpu_ram=4G
-#$ -l matylda1=5
+#$ -l matylda1=3
 #$ -q long.q@@gpu
 
 
