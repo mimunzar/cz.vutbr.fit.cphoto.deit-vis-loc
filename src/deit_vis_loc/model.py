@@ -104,8 +104,7 @@ def iter_training(model_goods, train_params, queries_meta, query_images):
 
 def make_im_transform(device):
     to_tensor = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(256, interpolation=3),
-        torchvision.transforms.CenterCrop(224),
+        torchvision.transforms.Resize(224, interpolation=3),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
     ])
