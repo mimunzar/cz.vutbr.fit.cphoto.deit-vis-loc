@@ -38,6 +38,7 @@ items:
 
     {
         "deit_model"        : "deit_tiny_patch16_224",
+        "input_size"        : 224,
         "max_epochs"        : 10,
         "batch_size"        : 64,
         "triplet_margin"    : 0.2,
@@ -51,19 +52,20 @@ Then start trainining by executing the following command:
 
     python -m src.deit_vis_loc.train_model \
         --segments_dataset <PATH> \
-        --segments_meta    <PATH> \
+        --queries_meta     <PATH> \
         --train_params     <PATH> \
         --output           <PATH>
 
 
-Usage for Model Testing [TODO]
-------------------------------
+Usage for Model Evaluation [TODO]
+---------------------------------
 
-    python -m src.deit_vis_loc.test_model \
+    python -m src.deit_vis_loc.eval_model \
         --segments_dataset  <PATH> \
-        --segments_meta     <PATH> \
+        --queries_meta      <PATH> \
         --model             <PATH> \
-        --yaw_tolerance_deg <INT>
+        --yaw_tolerance_deg <INT>  \
+        --input_size        <INT>
 
 
 Tests

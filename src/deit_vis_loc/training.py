@@ -3,17 +3,13 @@
 import collections as cl
 import functools   as ft
 import itertools   as it
-import json
-import operator as op
+import operator    as op
 import os
-import random as ra
+import random      as ra
 import time
 from datetime import datetime
 
 import torch
-import torch.hub
-import torch.optim
-import torch.cuda
 import torchvision.transforms
 from PIL import Image
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -92,23 +88,36 @@ def evaluate_epoch(model_goods, train_params, queries_meta, queries_it):
     return ft.reduce(op.add, loss_it, torch.zeros(1, 1, device=model_goods['device']))
 
 
-def iter_training(model_goods, train_params, queries_meta, query_images):
-    def train_and_evaluate_epoch(_):
-        queries_it = ra.sample(query_images['train'], k=len(query_images['train']))
-        #^ Shuffle dataset so generated batches are different every time
-        train_loss = train_epoch   (model_goods, train_params, queries_meta, queries_it)
-        val_loss   = evaluate_epoch(model_goods, train_params, queries_meta, query_images['val'])
-        return (train_loss.item(), val_loss.item())
-    return map(train_and_evaluate_epoch, it.repeat(None))
-
-
-def make_im_transform(device):
+def make_im_transform(device, input_size=224):
     to_tensor = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(224, interpolation=3),
+        torchvision.transforms.Resize(input_size, interpolation=3),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
     ])
     return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
+
+
+def iter_training(model_goods, train_params, queries_meta, query_images):
+    input_len = len(query_images['train'])
+    def train_and_evaluate_epoch(epoch):
+        queries_it = ra.sample(query_images['train'], k=input_len)
+        #^ Shuffle dataset so generated batches are different every time
+        train_loss = train_epoch   (model_goods, train_params, queries_meta, queries_it)
+        val_loss   = evaluate_epoch(model_goods, train_params, queries_meta, query_images['val'])
+        return {'epoch': epoch, 'train': train_loss.item(), 'val': val_loss.item()}
+    return map(train_and_evaluate_epoch, it.count(1))
+
+
+def make_is_learning(patience, min_delta):
+    q_losses = cl.deque(maxlen=patience + 1)
+    le_delta = lambda l, r: l - r <= min_delta
+    def is_training(losses):
+        q_losses.append(losses['val'])
+        full_queue = patience < len(q_losses)
+        rest_queue = it.islice(q_losses, 1, len(q_losses))
+        min_first  = all(it.starmap(le_delta, zip(it.repeat(q_losses[0]), rest_queue)))
+        return not (full_queue and min_first)
+    return is_training
 
 
 def make_save_model(save_dpath, params):
@@ -122,44 +131,22 @@ def make_save_model(save_dpath, params):
     return save_model
 
 
-def make_early_stoping(patience, min_delta):
-    q_losses = cl.deque(maxlen=patience + 1)
-    le_delta = lambda l, r: l - r <= min_delta
-    def early_stoping(loss):
-        q_losses.append(loss)
-        full_queue = patience < len(q_losses)
-        rest_queue = it.islice(q_losses, 1, len(q_losses))
-        min_first  = all(it.starmap(le_delta, zip(it.repeat(q_losses[0]), rest_queue)))
-        return full_queue and min_first
-    return early_stoping
-
-
-def device_name(device):
-    return 'cpu' if 'cpu' == device else torch.cuda.get_device_name(device)
-
-
-def train(query_images, queries_meta, train_params, output_dpath):
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model  = torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True)
-    model.to(device)
-    model_goods = {
-        'model'     : model,
-        'device'    : device,
-        'optimizer' : torch.optim.Adam(model.parameters(), train_params['learning_rate']),
-        'transform' : make_im_transform(device),
-    }
-
-    util.log('Started training on "{}" with {}'.format(device_name(device), json.dumps(train_params, indent=4)))
+def make_progress_IO(model_goods, train_params, output_dpath):
     save_model = make_save_model(output_dpath, train_params)
-    is_trained = make_early_stoping(train_params['stopping_patience'], min_delta=0.01)
-    train_it   = util.take(train_params['max_epochs'], iter_training(model_goods, train_params, queries_meta, query_images))
-    for epoch, (train_loss, val_loss) in enumerate(train_it, start=1):
-        save_model(model, epoch)
-        util.log('Loss for epoch {} is ({:0.4f}, {:0.4f})'.format(epoch, train_loss, val_loss))
-        if is_trained(val_loss):
-            best = epoch - train_params['stopping_patience']
-            util.log('Finished training with best model in {} epoch'.format(best))
-            break
+    def progress_IO(train_data):
+        e, tl, vl = op.itemgetter('epoch', 'train', 'val')(train_data)
+        util.log('Epoch {} loss is (train={:0.4f}, val={:0.4f})'.format(e, tl, vl))
+        save_model(model_goods['model'], e)
+        return train_data
+    return progress_IO
+
+
+def train(model_goods, train_params, queries_meta, query_images, output_dpath):
+    progress_IO = make_progress_IO(model_goods, train_params, output_dpath)
+    is_learning = make_is_learning(train_params['stopping_patience'], min_delta=0.01)
+    training_it = iter_training(model_goods, train_params, queries_meta, query_images)
+    learning_it = it.takewhile(is_learning, util.take(train_params['max_epochs'], training_it))
+    return min(map(progress_IO, learning_it), key=lambda losses: losses['val'])
 
 
 def iter_test_pairs(queries_meta, queries_it):
@@ -179,11 +166,9 @@ def test_model(model, fn_embeddings, queries_meta, queries_it):
     return ({'query': q, 'segments': it.starmap(build_segment, p)} for q, p in test_pairs)
 
 
-def test(queries_meta, queries_it, model_fpath):
-    device  = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model   = torch.load(model_fpath)
-    model.to(device)
-    forward = util.memoize(make_forward(model, make_im_transform(device)))
+def test(model_goods, queries_meta, queries_it):
+    transform = make_im_transform(model_goods['device'])
+    forward   = util.memoize(make_forward(model_goods['model'], transform))
     #^ Saves re-computation of forwarding as the model is fixed during evaluation
-    return test_model(model, forward, queries_meta, queries_it)
+    return test_model(model_goods['model'], forward, queries_meta, queries_it)
 

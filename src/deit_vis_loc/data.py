@@ -39,10 +39,10 @@ def parse_queries_metadata(segments_meta, dataset_dpath, yaw_tolerance_rad):
     return {to_query_path(k): map_segment_path(v) for k, v in pos_neg_segments}
 
 
-def read_queries_metadata(args, yaw_tolerance_deg):
+def read_queries_metadata(queries_meta_fpath, dataset_dpath, yaw_tolerance_deg):
     tolerance_rad = ma.radians(yaw_tolerance_deg)
-    with open(args['segments_meta']) as f:
-        return parse_queries_metadata(json.load(f), args['segments_dataset'], tolerance_rad)
+    with open(queries_meta_fpath) as f:
+        return parse_queries_metadata(json.load(f), dataset_dpath, tolerance_rad)
 
 
 def read_query_imgs(dataset_dpath, name):
@@ -61,6 +61,7 @@ def parse_train_params(train_params):
         'batch_size'        : util.make_validator('batch_size must be a positive int', is_positive_int),
         'deit_model'        : util.make_validator('deit_model must be a non-empty string', is_nonempty_or_null),
         'resnet_model'      : util.make_validator('resnet_model must be a non-empty string', is_nonempty_or_null),
+        'input_size'        : util.make_validator('input size (resolution) must be a positive int', is_positive_int),
         'max_epochs'        : util.make_validator('max_epochs must be a positive int', is_positive_int),
         'triplet_margin'    : util.make_validator('triplet_margin must be positive', is_positive),
         'learning_rate'     : util.make_validator('learning_rate must be positive', is_positive),
