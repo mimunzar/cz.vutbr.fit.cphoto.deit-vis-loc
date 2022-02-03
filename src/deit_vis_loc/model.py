@@ -59,8 +59,15 @@ def backward(optimizer, loss):
     return loss
 
 
-def train_batch(model_goods, fn_iter_loss, queries_meta, queries_it):
-    loss_it      = fn_iter_loss(iter_triplets(queries_meta, queries_it))
+def make_forward(model, fn_transform):
+    return lambda fpath: model(fn_transform(fpath))
+
+
+def train_batch(model_goods, triplet_margin, queries_meta, queries_it):
+    transform    = util.memoize(model_goods['transform'])
+    #^ Saves re-computation of im tensors, but don't cache forwarding as the model is changing
+    iter_loss    = make_iter_triplet_loss(make_forward(model_goods['model'], transform), triplet_margin)
+    loss_it      = iter_loss(iter_triplets(queries_meta, queries_it))
     prop_loss_it = map(ft.partial(backward, model_goods['optimizer']), loss_it)
     return ft.reduce(op.add, prop_loss_it, torch.zeros(1, 1, device=model_goods['device']))
 
@@ -69,8 +76,7 @@ def train_epoch(model_goods, train_params, queries_meta, queries_it):
     torch.set_grad_enabled(True)
     model_goods['model'].train();
 
-    iter_loss     = make_iter_triplet_loss(model_goods['forward'], train_params['triplet_margin'])
-    batch_loss    = ft.partial(train_batch, model_goods, iter_loss, queries_meta)
+    batch_loss    = ft.partial(train_batch, model_goods, train_params['triplet_margin'], queries_meta)
     batch_loss_it = map(batch_loss, util.partition(train_params['batch_size'], queries_it))
     return ft.reduce(op.add, batch_loss_it, torch.zeros(1, 1, device=model_goods['device']))
 
@@ -79,10 +85,10 @@ def evaluate_epoch(model_goods, train_params, queries_meta, queries_it):
     torch.set_grad_enabled(False)
     model_goods['model'].eval();
 
-    cached_fwd = ft.lru_cache(maxsize=None)(model_goods['forward'])
-    #^ Saves re-computation of repeated images in triplets
-    iter_loss  = make_iter_triplet_loss(cached_fwd, train_params['triplet_margin'])
-    loss_it    = iter_loss(iter_triplets(queries_meta, queries_it))
+    forward   = util.memoize(make_forward(model_goods['model'], model_goods['transform']))
+    #^ Saves re-computation of forwarding as the model is fixed during evaluation
+    iter_loss = make_iter_triplet_loss(forward, train_params['triplet_margin'])
+    loss_it   = iter_loss(iter_triplets(queries_meta, queries_it))
     return ft.reduce(op.add, loss_it, torch.zeros(1, 1, device=model_goods['device']))
 
 
@@ -96,18 +102,14 @@ def iter_training(model_goods, train_params, queries_meta, query_images):
     return map(train_and_evaluate_epoch, it.repeat(None))
 
 
-def make_forward_img(model, device):
+def make_im_transform(device):
     to_tensor = torchvision.transforms.Compose([
         torchvision.transforms.Resize(256, interpolation=3),
         torchvision.transforms.CenterCrop(224),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
     ])
-    def forward_img(fpath):
-        im        = Image.open(fpath).convert('RGB')
-        im_tensor = to_tensor(im).unsqueeze(0).to(device)
-        return model(im_tensor)
-    return forward_img
+    return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
 
 
 def make_save_model(save_dpath, params):
@@ -145,7 +147,7 @@ def train(query_images, queries_meta, train_params, output_dpath):
         'model'     : model,
         'device'    : device,
         'optimizer' : torch.optim.Adam(model.parameters(), train_params['learning_rate']),
-        'forward'   : make_forward_img(model, device),
+        'transform' : make_im_transform(device),
     }
 
     util.log('Started training on "{}" with {}'.format(device_name(device), json.dumps(train_params, indent=4)))
@@ -179,10 +181,10 @@ def test_model(model, fn_embeddings, queries_meta, queries_it):
 
 
 def test(queries_meta, queries_it, model_fpath):
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model  = torch.load(model_fpath)
+    device  = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model   = torch.load(model_fpath)
     model.to(device)
-    forward = ft.lru_cache(maxsize=None)(make_forward_img(model, device))
-    #^ Saves re-computation of repeated images in triplets
+    forward = util.memoize(make_forward(model, make_im_transform(device)))
+    #^ Saves re-computation of forwarding as the model is fixed during evaluation
     return test_model(model, forward, queries_meta, queries_it)
 

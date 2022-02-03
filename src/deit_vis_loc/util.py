@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-import itertools as it
 import datetime  as dt
+import functools as ft
+import itertools as it
 import math      as ma
 
 
@@ -26,6 +27,10 @@ def take(n, iterable):
 
 def flatten(iterable):
     return it.chain.from_iterable(iterable)
+
+
+def memoize(f):
+    return ft.lru_cache(maxsize=None)(f)
 
 
 def make_validator(msg, fn_valid):
