@@ -2,8 +2,8 @@
 #
 #$ -S /bin/bash
 #$ -N deit_vis_loc
-#$ -l ram_free=6G,mem_free=6G
-#$ -l gpu=1,gpu_ram=4G
+#$ -l ram_free=16G,mem_free=16G
+#$ -l gpu=1,gpu_ram=8G
 #$ -l matylda1=3
 #$ -q long.q@@gpu
 
