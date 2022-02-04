@@ -16,7 +16,7 @@ mkdir -p output/
 /bin/bash scripts/exec_in_conda_env.sh miniconda/ environment.yml \
     python -um src.deit_vis_loc.train_model \
         --segments_dataset input/ \
-        --segments_meta    input/segments_meta.json \
+        --queries_meta     input/queries_meta.json \
         --train_params     input/train_params.json \
         --output           output/ &> output/"$(date +'%Y%m%dT%H%M%S').log"
 

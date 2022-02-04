@@ -50,14 +50,14 @@ def test_iter_triplets():
 def test_triplet_loss():
     z = torch.zeros(1, 1)
     o = torch.ones (1, 1)
-    loss = ft.partial(training.triplet_loss, lambda x: x, 0)
+    loss = ft.partial(training.triplet_loss, 0, lambda x: x)
     assert loss({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.]])
     assert loss({'anchor': z, 'positive': z, 'negative': o}) == torch.tensor([[0.]])
     assert loss({'anchor': z, 'positive': o, 'negative': z}) == torch.tensor([[1.]])
     assert loss({'anchor': z, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
     assert loss({'anchor': o, 'positive': o, 'negative': o}) == torch.tensor([[0.]])
 
-    loss = ft.partial(training.triplet_loss, lambda x: x, 0.5)
+    loss = ft.partial(training.triplet_loss, 0.5, lambda x: x)
     assert loss({'anchor': z, 'positive': z, 'negative': z}) == torch.tensor([[0.5]])
     assert loss({'anchor': z, 'positive': z, 'negative': o}) == torch.tensor([[0.]])
     assert loss({'anchor': z, 'positive': o, 'negative': z}) == torch.tensor([[1.5]])
@@ -68,9 +68,9 @@ def test_triplet_loss():
 def test_iter_triplet_loss():
     z       = torch.zeros(1, 1)
     o       = torch.ones (1, 1)
-    loss_it = training.make_iter_triplet_loss(lambda x: x, margin=0.5)
-    assert list(loss_it([])) == []
-    assert list(loss_it([
+    loss_it = training.make_iter_triplet_loss(0.5, lambda x: x, lambda _, q_it: q_it)
+    assert list(loss_it({}, [])) == []
+    assert list(loss_it({}, [
             {'anchor': z, 'positive': z, 'negative': z},
             {'anchor': z, 'positive': z, 'negative': o},
             {'anchor': z, 'positive': o, 'negative': z},

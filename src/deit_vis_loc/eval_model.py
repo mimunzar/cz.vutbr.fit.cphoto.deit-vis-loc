@@ -41,5 +41,5 @@ if __name__ == "__main__":
         'device'    : device,
         'transform' : training.make_im_transform(device, args['input_size']),
     }
-    test_result  = training.test(model_goods, queries_meta, queries_it)
+    test_result  = training.eval(model_goods, queries_meta, queries_it)
 

@@ -34,18 +34,22 @@ def iter_triplets(queries_meta, queries_it):
     return it.starmap(label, trp_it)
 
 
-def triplet_loss(fn_embeddings, margin, triplet):
-    a_embed = fn_embeddings(triplet['anchor'])
-    a_p_dis = torch.cdist(a_embed, fn_embeddings(triplet['positive']))
-    a_n_dis = torch.cdist(a_embed, fn_embeddings(triplet['negative']))
+def triplet_loss(margin, fn_forward, triplet):
+    a_embed = fn_forward(triplet['anchor'])
+    a_p_dis = torch.cdist(a_embed, fn_forward(triplet['positive']))
+    a_n_dis = torch.cdist(a_embed, fn_forward(triplet['negative']))
     result  = a_p_dis - a_n_dis + margin
     result[0 > result] = 0
     return result
 
 
-def make_iter_triplet_loss(fn_embeddings, margin):
-    loss = ft.partial(triplet_loss, fn_embeddings, margin)
-    return lambda triplets_it: filter(torch.is_nonzero, map(loss, triplets_it))
+def make_iter_triplet_loss(margin, fn_forward, fn_iter_triplets=iter_triplets):
+    loss = ft.partial(triplet_loss, margin, fn_forward)
+    def iter_triplet_loss(queries_meta, queries_it):
+        triplets_it = fn_iter_triplets(queries_meta, queries_it)
+        pos_loss_it = filter(torch.is_nonzero, map(loss, triplets_it))
+        return pos_loss_it
+    return iter_triplet_loss
 
 
 def backward(optimizer, loss):
@@ -55,17 +59,16 @@ def backward(optimizer, loss):
     return loss
 
 
-def make_forward(model, fn_transform):
-    return lambda fpath: model(fn_transform(fpath))
+def forward(model, fn_transform, fpath):
+    return model(fn_transform(fpath))
 
 
-def train_batch(model_goods, triplet_margin, queries_meta, queries_it):
-    transform    = util.memoize(model_goods['transform'])
-    #^ Saves re-computation of im tensors, but don't cache forwarding as the model is changing
-    iter_loss    = make_iter_triplet_loss(make_forward(model_goods['model'], transform), triplet_margin)
-    loss_it      = iter_loss(iter_triplets(queries_meta, queries_it))
-    prop_loss_it = map(ft.partial(backward, model_goods['optimizer']), loss_it)
-    return ft.reduce(op.add, prop_loss_it, torch.zeros(1, 1, device=model_goods['device']))
+def train_batch(model_goods, margin, queries_meta, queries_it):
+    transform = util.memoize(model_goods['transform'])
+    #^ Saves re-computation of image tensors, but don't cache forwarding as the model is changing
+    iter_loss = make_iter_triplet_loss(margin, ft.partial(forward, model_goods['model'], transform))
+    loss_it   = map(ft.partial(backward, model_goods['optimizer']), iter_loss(queries_meta, queries_it))
+    return ft.reduce(op.add, loss_it, torch.zeros(1, 1, device=model_goods['device']))
 
 
 def train_epoch(model_goods, train_params, queries_meta, queries_it):
@@ -81,10 +84,10 @@ def evaluate_epoch(model_goods, train_params, queries_meta, queries_it):
     torch.set_grad_enabled(False)
     model_goods['model'].eval();
 
-    forward   = util.memoize(make_forward(model_goods['model'], model_goods['transform']))
+    m_forward = util.memoize(ft.partial(forward, model_goods['model'], model_goods['transform']))
     #^ Saves re-computation of forwarding as the model is fixed during evaluation
-    iter_loss = make_iter_triplet_loss(forward, train_params['triplet_margin'])
-    loss_it   = iter_loss(iter_triplets(queries_meta, queries_it))
+    iter_loss = make_iter_triplet_loss(train_params['triplet_margin'], m_forward)
+    loss_it   = iter_loss(queries_meta, queries_it)
     return ft.reduce(op.add, loss_it, torch.zeros(1, 1, device=model_goods['device']))
 
 
@@ -156,19 +159,20 @@ def iter_test_pairs(queries_meta, queries_it):
     return ((q, set(p)) for q, p in it.groupby(product, op.itemgetter(0)))
 
 
-def test_model(model, fn_embeddings, queries_meta, queries_it):
+def eval_model(model, fn_forward, queries_meta, queries_it):
     torch.set_grad_enabled(False)
     model.eval();
+
     is_positive    = lambda q, s: {'is_positive': s in queries_meta[q]['positive']}
-    distance       = lambda l, r: {'distance': torch.cdist(fn_embeddings(l), fn_embeddings(r))}
+    distance       = lambda l, r: {'distance': torch.cdist(fn_forward(l), fn_forward(r))}
     build_segment  = lambda q, s: {'name': s, **distance(q, s), **is_positive(q, s)}
     test_pairs     = iter_test_pairs(queries_meta, queries_it)
     return ({'query': q, 'segments': it.starmap(build_segment, p)} for q, p in test_pairs)
 
 
-def test(model_goods, queries_meta, queries_it):
+def eval(model_goods, queries_meta, queries_it):
     transform = make_im_transform(model_goods['device'])
-    forward   = util.memoize(make_forward(model_goods['model'], transform))
+    m_forward = util.memoize(ft.partial(forward, model_goods['model'], transform))
     #^ Saves re-computation of forwarding as the model is fixed during evaluation
-    return test_model(model_goods['model'], forward, queries_meta, queries_it)
+    return eval_model(model_goods['model'], m_forward, queries_meta, queries_it)
 
