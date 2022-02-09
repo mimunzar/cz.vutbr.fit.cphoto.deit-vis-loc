@@ -3,6 +3,7 @@
 import argparse
 import json
 import sys
+import tracemalloc
 
 import torch.hub
 import torch.optim
@@ -35,6 +36,7 @@ def device_name(device):
 
 
 if __name__ == "__main__":
+    tracemalloc.start()
     gpu_owner    = safe_gpu.GPUOwner()
     args         = parse_args(sys.argv[1:])
     train_params = data.read_train_params(args['train_params'])

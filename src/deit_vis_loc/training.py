@@ -7,6 +7,7 @@ import operator    as op
 import os
 import random      as ra
 from datetime import datetime
+import tracemalloc
 
 import torch
 import torchvision.transforms
@@ -146,6 +147,9 @@ def make_epoch_IO(model_goods, train_params, output_dpath):
     save_model = make_save_model(output_dpath, train_params)
     def epoch_IO(epoch, train, val, speed, **rest):
         util.log(f'Epoch {epoch} ended, tloss: {train:.4f}, vloss: {val:.4f}, speed {speed:.2f} im/sec')
+        mem_size, peak_size = map(lambda x: x/1024, tracemalloc.get_traced_memory())
+        util.log(f'Mem size {mem_size:.1f} KiB, peak size {peak_size:.1f} KiB')
+        tracemalloc.take_snapshot().dump(f'snapshot_{epoch}.mem')
         save_model(model_goods['model'], epoch)
         return {**{'epoch': epoch, 'train': train, 'val': val}, **rest}
     return epoch_IO
