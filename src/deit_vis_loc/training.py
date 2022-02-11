@@ -16,21 +16,20 @@ from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 import src.deit_vis_loc.util as util
 
 
-def make_qpn(queries_meta, queries_it):
+def make_triplets(queries_meta, queries_it):
     query_segments = lambda q: util.flatten(queries_meta[q].values())
     segments       = set(util.flatten(map(query_segments, queries_it)))
-    def qpn(query):
+    def triplets(query):
         query_pos = queries_meta[query]['positive']
         query_neg = segments - query_pos
-        return ({query}, query_pos, query_neg)
-    return qpn
+        return it.product({query}, query_pos, query_neg)
+    return triplets
 
 
 def iter_triplets(queries_meta, queries_it):
-    label  = lambda q, p, n: {'anchor': q, 'positive': p, 'negative': n}
-    qpn_it = map(make_qpn(queries_meta, queries_it), queries_it)
-    trp_it = util.flatten(it.starmap(it.product, qpn_it))
-    return it.starmap(label, trp_it)
+    triplets = make_triplets(queries_meta, queries_it)
+    labels   = lambda q, p, n: {'anchor': q, 'positive': p, 'negative': n}
+    return it.starmap(labels, util.flatten(map(triplets, queries_it)))
 
 
 def triplet_loss(margin, fn_forward, triplet):
@@ -45,14 +44,13 @@ def triplet_loss(margin, fn_forward, triplet):
 def make_iter_triplet_loss(margin, fn_forward, fn_iter_triplets=iter_triplets):
     loss = ft.partial(triplet_loss, margin, fn_forward)
     def iter_triplet_loss(queries_meta, queries_it):
-        triplets_it = fn_iter_triplets(queries_meta, queries_it)
-        pos_loss_it = filter(torch.is_nonzero, map(loss, triplets_it))
-        return pos_loss_it
+        return map(loss, fn_iter_triplets(queries_meta, queries_it))
     return iter_triplet_loss
 
 
 def backward(optimizer, loss):
-    optimizer.zero_grad(); loss.backward(); optimizer.step()
+    if (torch.is_nonzero(loss)):
+        optimizer.zero_grad(); loss.backward(); optimizer.step()
     return loss
 
 
@@ -60,49 +58,69 @@ def forward(model, fn_transform, fpath):
     return model(fn_transform(fpath))
 
 
-def train_batch(model_goods, margin, queries_meta, queries_it):
+def im_triplets(queries_meta, queries_it):
+    seg_it = util.pluck(['positive', 'negative'], util.first(queries_meta.values()))
+    return util.im_triplets(*map(len, util.prepend(queries_it, seg_it)))
+
+
+def make_track_stats(stage, queries_meta, queries_it):
+    queries_it  = tuple(queries_it)
+    total_ims   = len(queries_it)
+    im_tps      = im_triplets(queries_meta, queries_it)
+    avg_ims_sec = util.make_avg_ims_sec()
+    formatter   = util.make_progress_formatter(bar_width=40, total=total_ims)
+    ims, tps    = (0, 0)
+    print(f' {formatter(stage, ims, 0)}', end='\r')
+    def track_stats(acc, loss):
+        nonlocal ims, tps
+        tps   = tps + 1
+        speed = acc['speed']
+        if 0 == tps % im_tps:
+            ims   = ims + 1
+            speed = avg_ims_sec(1)
+            print(f'\033[K {formatter(stage, ims, speed)}', end='\n' if ims == total_ims else '\r')
+        return {'loss': acc['loss'] + float(loss), 'speed': speed}
+        #^ Don't accumulate autograd history, hence cast the Variable to float
+    return track_stats
+
+
+def train_batch(model_goods, margin, queries_meta, batches_total, batch_idx, queries_it):
+    stage_str = f'Batch {util.format_fraction(batch_idx, batches_total)}'
     transform = util.memoize(model_goods['transform'])
     #^ Save re-computation of image tensors, but don't cache forwarding as the model is changing
     iter_loss = make_iter_triplet_loss(margin, ft.partial(forward, model_goods['model'], transform))
     loss_it   = map(ft.partial(backward, model_goods['optimizer']), iter_loss(queries_meta, queries_it))
-    return ft.reduce(lambda a, l: a + float(l), loss_it, 0)
-    #^ Don't accumulate history, hence cast the variable to float
+    return ft.reduce(make_track_stats(stage_str, queries_meta, queries_it), loss_it, {'loss': 0, 'speed': 0})
 
 
-def make_batch_stats(batch_size, queries_it):
-    progress_bar = ft.partial(util.progress_bar, 40, len(tuple(queries_it)))
-    running_avg  = util.make_running_avg()
-    ims_sec      = util.make_ims_sec()
-    batch_idx    = 0
-    print(f'\033[K  {progress_bar(0)}  (0.00 im/sec)', end='\r')
-    def batch_stats(acc, loss):
-        nonlocal batch_idx
-        batch_idx   = batch_idx + 1
-        done_ims    = batch_idx*batch_size
-        avg_ims_sec = running_avg(ims_sec(done_ims))
-        print(f'\033[K  {progress_bar(done_ims)}  ({avg_ims_sec:.02} im/sec)', end='\r')
-        return {'loss': acc['loss'] + loss, 'speed': avg_ims_sec}
-    return batch_stats
+def make_epoch_stats():
+    running_avg = util.make_running_avg()
+    def epoch_stats(acc, batch_stats):
+        speed = running_avg(batch_stats['speed'])
+        loss  = acc['loss'] + batch_stats['loss']
+        return {'loss': loss, 'speed': speed}
+    return epoch_stats
 
 
 def train_epoch(model_goods, train_params, queries_meta, queries_it):
     queries_it = tuple(queries_it)
     with torch.enable_grad():
         model_goods['model'].train()
-        batch_stats   = make_batch_stats(train_params['batch_size'], queries_it)
-        batch_loss    = ft.partial(train_batch, model_goods, train_params['triplet_margin'], queries_meta)
-        batch_loss_it = map(batch_loss, util.partition(train_params['batch_size'], queries_it))
-        return ft.reduce(batch_stats, batch_loss_it, {'loss': 0, 'speed': 0})
+        batches       = tuple(util.partition(train_params['batch_size'], queries_it))
+        batch_loss    = ft.partial(train_batch, model_goods, train_params['triplet_margin'], queries_meta, len(batches))
+        batch_loss_it = it.starmap(batch_loss, enumerate(batches, start=1))
+        return ft.reduce(make_epoch_stats(), batch_loss_it, {'loss': 0, 'speed': 0})
 
 
 def evaluate_epoch(model_goods, train_params, queries_meta, queries_it):
     queries_it = tuple(queries_it)
     with torch.no_grad():
         model_goods['model'].eval()
-        c_forward   = util.memoize(ft.partial(forward, model_goods['model'], model_goods['transform']))
+        eval_stats = make_track_stats('Eval', queries_meta, queries_it)
+        c_forward  = util.memoize(ft.partial(forward, model_goods['model'], model_goods['transform']))
         #^ Saves re-computation of forwarding as the model is fixed during evaluation
-        iter_loss = make_iter_triplet_loss(train_params['triplet_margin'], c_forward)
-        return ft.reduce(lambda a, l: a + float(l), iter_loss(queries_meta, queries_it), 0)
+        iter_loss  = make_iter_triplet_loss(train_params['triplet_margin'], c_forward)
+        return ft.reduce(eval_stats, iter_loss(queries_meta, queries_it), {'loss': 0, 'speed': 0})
 
 
 def iter_training(model_goods, train_params, queries_meta, query_images):
@@ -111,9 +129,9 @@ def iter_training(model_goods, train_params, queries_meta, query_images):
     def train_and_evaluate_epoch(epoch):
         queries_it = ra.sample(query_images['train'], k=input_len)
         #^ Shuffle dataset so generated batches are different every time
-        tloss, tspeed = pluck(train_epoch(model_goods, train_params, queries_meta, queries_it))
-        vloss         = evaluate_epoch(model_goods, train_params, queries_meta, query_images['val'])
-        return {'epoch': epoch, 'train': tloss, 'val': vloss, 'speed': tspeed}
+        tloss, tspeed = pluck(train_epoch   (model_goods, train_params, queries_meta, queries_it))
+        vloss, vspeed = pluck(evaluate_epoch(model_goods, train_params, queries_meta, query_images['val']))
+        return {'epoch': epoch, 'train': tloss, 'val': vloss, 'tspeed': tspeed, 'vspeed': vspeed}
     return map(train_and_evaluate_epoch, it.count(1))
 
 
@@ -140,21 +158,22 @@ def make_save_model(save_dpath, params):
     return save_model
 
 
-def make_epoch_IO(model_goods, train_params, output_dpath):
+def make_train_stats(model_goods, train_params, output_dpath):
     save_model = make_save_model(output_dpath, train_params)
-    def epoch_IO(epoch, train, val, speed, **rest):
-        util.log(f'Epoch {epoch} ended, tloss: {train:.4f}, vloss: {val:.4f}, speed {speed:.2f} im/sec')
+    def train_stats(epoch, train, val, tspeed, vspeed, **rest):
+        util.log(f'Epoch {epoch} ended, tloss: {train:.2f}, vloss: {val:.2f},'
+               + f'tspeed {tspeed:.2f}, vspeed {vspeed:.2f} im/s', start='\n', end='\n\n')
         save_model(model_goods['model'], epoch)
         return {**{'epoch': epoch, 'train': train, 'val': val}, **rest}
-    return epoch_IO
+    return train_stats
 
 
 def train(model_goods, train_params, queries_meta, query_images, output_dpath):
-    epoch_IO    = make_epoch_IO(model_goods, train_params, output_dpath)
+    train_stats = make_train_stats(model_goods, train_params, output_dpath)
     is_learning = make_is_learning(train_params['stopping_patience'], min_delta=0.01)
     training_it = iter_training(model_goods, train_params, queries_meta, query_images)
     learning_it = it.takewhile(is_learning, util.take(train_params['max_epochs'], training_it))
-    return min(map(lambda d: epoch_IO(**d), learning_it), key=lambda losses: losses['val'])
+    return min(map(lambda d: train_stats(**d), learning_it), key=lambda losses: losses['val'])
 
 
 def iter_test_pairs(queries_meta, queries_it):

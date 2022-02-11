@@ -9,21 +9,29 @@ import torch
 import src.deit_vis_loc.training as training
 
 
-def test_make_qpn():
+def test_make_triplets():
     queries_meta = {
         'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
     }
-    qpn  = training.make_qpn(queries_meta, queries_meta.keys())
-    assert qpn('foo') == ({'foo'}, {'foo_p'}, {'foo_n'})
-    with pytest.raises(KeyError): qpn('bar')
+    triplets = training.make_triplets(queries_meta, queries_meta.keys())
+    assert set(triplets('foo')) == {('foo', 'foo_p', 'foo_n')}
+    with pytest.raises(KeyError): triplets('baz')
 
     queries_meta = {
         'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
         'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
     }
-    qpn  = training.make_qpn(queries_meta, queries_meta.keys())
-    assert qpn('foo') == ({'foo'}, {'foo_p'}, {'bar_p', 'bar_n', 'foo_n'})
-    assert qpn('bar') == ({'bar'}, {'bar_p'}, {'foo_p', 'foo_n', 'bar_n'})
+    triplets = training.make_triplets(queries_meta, queries_meta.keys())
+    assert set(triplets('foo')) == {
+            ('foo', 'foo_p', 'foo_n'),
+            ('foo', 'foo_p', 'bar_n'),
+            ('foo', 'foo_p', 'bar_p'),
+        }
+    assert set(triplets('bar')) == {
+            ('bar', 'bar_p', 'bar_n'),
+            ('bar', 'bar_p', 'foo_n'),
+            ('bar', 'bar_p', 'foo_p'),
+        }
 
 
 def test_iter_triplets():
@@ -35,7 +43,6 @@ def test_iter_triplets():
     assert list(training.iter_triplets(queries_meta, ['foo'])) == [
             {'anchor': 'foo', 'positive': 'foo_p', 'negative': 'foo_n'},
         ]
-
     triplets = training.iter_triplets(queries_meta, ['foo', 'bar'])
     assert sorted(triplets, key=op.itemgetter('anchor', 'negative')) == [
             {'anchor': 'bar', 'positive': 'bar_p', 'negative': 'bar_n'},
@@ -77,10 +84,10 @@ def test_iter_triplet_loss():
             {'anchor': z, 'positive': o, 'negative': o},
             {'anchor': o, 'positive': o, 'negative': o},
         ])) == [torch.tensor([[0.5]]),
+                torch.tensor([[0.]]),
                 torch.tensor([[1.5]]),
                 torch.tensor([[0.5]]),
                 torch.tensor([[0.5]])]
-    #^ Same as in triplet_loss test but filters out zero losses
 
 
 def test_early_stopping():

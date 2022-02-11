@@ -56,7 +56,7 @@ if __name__ == "__main__":
         'transform' : training.make_im_transform(device, train_params['input_size']),
     }
 
-    util.log('Started training on "{}" with {}'.format(device_name(device), json.dumps(train_params, indent=4)))
+    util.log(f'Started training on "{device_name(device)}" with {json.dumps(train_params, indent=4)}')
     result = training.train(model_goods, train_params, queries_meta, query_images, args['output'])
-    util.log('Training ended with the best model in epoch {}'.format(result['epoch']))
+    util.log(f'Training ended with the best model in epoch {result["epoch"]}', start='\n')
 
