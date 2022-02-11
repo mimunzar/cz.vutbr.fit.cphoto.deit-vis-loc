@@ -62,10 +62,11 @@ def forward(model, fn_transform, fpath):
 
 def train_batch(model_goods, margin, queries_meta, queries_it):
     transform = util.memoize(model_goods['transform'])
-    #^ Saves re-computation of image tensors, but don't cache forwarding as the model is changing
+    #^ Save re-computation of image tensors, but don't cache forwarding as the model is changing
     iter_loss = make_iter_triplet_loss(margin, ft.partial(forward, model_goods['model'], transform))
     loss_it   = map(ft.partial(backward, model_goods['optimizer']), iter_loss(queries_meta, queries_it))
-    return ft.reduce(op.add, loss_it, torch.zeros(1, 1, device=model_goods['device']))
+    return ft.reduce(lambda a, l: a + float(l), loss_it, 0)
+    #^ Don't accumulate history, hence cast the variable to float
 
 
 def make_batch_stats(batch_size, queries_it):
@@ -85,26 +86,23 @@ def make_batch_stats(batch_size, queries_it):
 
 
 def train_epoch(model_goods, train_params, queries_meta, queries_it):
-    queries_it    = tuple(queries_it)
-    model, device = util.pluck(['model', 'device'], model_goods)
+    queries_it = tuple(queries_it)
     with torch.enable_grad():
-        model.train()
+        model_goods['model'].train()
         batch_stats   = make_batch_stats(train_params['batch_size'], queries_it)
         batch_loss    = ft.partial(train_batch, model_goods, train_params['triplet_margin'], queries_meta)
         batch_loss_it = map(batch_loss, util.partition(train_params['batch_size'], queries_it))
-        return ft.reduce(batch_stats, batch_loss_it, {'loss': torch.zeros(1, 1, device=device), 'speed': 0})
+        return ft.reduce(batch_stats, batch_loss_it, {'loss': 0, 'speed': 0})
 
 
 def evaluate_epoch(model_goods, train_params, queries_meta, queries_it):
-    queries_it    = tuple(queries_it)
-    model, device = util.pluck(['model', 'device'], model_goods)
-    margin        = util.pluck(['triplet_margin'], train_params)
+    queries_it = tuple(queries_it)
     with torch.no_grad():
-        model.eval()
-        c_forward   = util.memoize(ft.partial(forward, model, model_goods['transform']))
+        model_goods['model'].eval()
+        c_forward   = util.memoize(ft.partial(forward, model_goods['model'], model_goods['transform']))
         #^ Saves re-computation of forwarding as the model is fixed during evaluation
-        val_loss_it = make_iter_triplet_loss(margin, c_forward)(queries_meta, queries_it)
-        return ft.reduce(op.add, val_loss_it, torch.zeros(1, 1, device=device))
+        iter_loss = make_iter_triplet_loss(train_params['triplet_margin'], c_forward)
+        return ft.reduce(lambda a, l: a + float(l), iter_loss(queries_meta, queries_it), 0)
 
 
 def iter_training(model_goods, train_params, queries_meta, query_images):
@@ -115,7 +113,7 @@ def iter_training(model_goods, train_params, queries_meta, query_images):
         #^ Shuffle dataset so generated batches are different every time
         tloss, tspeed = pluck(train_epoch(model_goods, train_params, queries_meta, queries_it))
         vloss         = evaluate_epoch(model_goods, train_params, queries_meta, query_images['val'])
-        return {'epoch': epoch, 'train': tloss.item(), 'val': vloss.item(), 'speed': tspeed}
+        return {'epoch': epoch, 'train': tloss, 'val': vloss, 'speed': tspeed}
     return map(train_and_evaluate_epoch, it.count(1))
 
 
