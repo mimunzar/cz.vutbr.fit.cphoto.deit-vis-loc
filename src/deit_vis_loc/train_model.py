@@ -15,18 +15,19 @@ import src.deit_vis_loc.util     as util
 
 
 def parse_args(args_it):
-    parser = argparse.ArgumentParser(
-            description='Allows to train DeiT transformers for visual localization.')
-    parser.add_argument('-q', '--queries_meta',
-            required=True, help='The path to file containing metadata for query images')
-    parser.add_argument('-d', '--segments_dataset',
-            required=True, help='The path to directory containing dataset of rendered segments')
-    parser.add_argument('-p', '--train_params',
-            required=True, help='The path to file containing training parameters')
-    parser.add_argument('-o', '--output',
-            required=True, help='The path to directory where results are saved')
-    parser.add_argument('-s', '--dataset_size', type=int, default=None,
-            required=False, help='When set it slices input datasets to n items')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--metafile',     help='The path to file containing metadata for queries',
+            required=True, metavar='FILE')
+    parser.add_argument('--dataset-dir',  help='The path to dataset of rendered segments',
+            required=True, metavar='DIR')
+    parser.add_argument('--dataset-size', help='When set it slices input datasets to n items',
+            required=False, type=int, default=None, metavar='NUM')
+    parser.add_argument('--train-params', help='The path to file containing training parameters',
+            required=True, metavar='FILE')
+    parser.add_argument('--output-dir',   help='The path to directory where results are saved',
+            required=True, metavar='DIR')
+    parser.add_argument('--sge',          help='When set it initializes training for SGE server',
+            required=False, action='store_const', const=True, default=False)
     return vars(parser.parse_args(args_it))
 
 
@@ -35,12 +36,13 @@ def device_name(device):
 
 
 if __name__ == "__main__":
-    gpu_owner    = safe_gpu.GPUOwner()
-    args         = parse_args(sys.argv[1:])
+    args = parse_args(sys.argv[1:])
+    if args['sge']:
+        gpu_owner = safe_gpu.GPUOwner()
     train_params = data.read_train_params(args['train_params'])
-    queries_meta = data.read_queries_metadata(args['queries_meta'],
-            args['segments_dataset'], train_params['yaw_tolerance_deg'])
-    iter_queries = lambda f: data.read_query_imgs(args['segments_dataset'], f)
+    queries_meta = data.read_queries_metadata(args['metafile'],
+            args['dataset_dir'], train_params['yaw_tolerance_deg'])
+    iter_queries = lambda f: data.read_query_imgs(args['dataset_dir'], f)
     query_images = {
         'train': set(util.take(args['dataset_size'], iter_queries('train.txt'))),
         'val'  : set(util.take(args['dataset_size'], iter_queries('val.txt'))),
@@ -57,6 +59,6 @@ if __name__ == "__main__":
     }
 
     util.log(f'Started training on "{device_name(device)}" with {json.dumps(train_params, indent=4)}')
-    result = training.train(model_goods, train_params, queries_meta, query_images, args['output'])
+    result = training.train(model_goods, train_params, queries_meta, query_images, args['output_dir'])
     util.log(f'Training ended with the best model in epoch {result["epoch"]}', start='\n')
 

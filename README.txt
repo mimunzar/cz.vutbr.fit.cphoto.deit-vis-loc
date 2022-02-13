@@ -51,10 +51,10 @@ items:
 Then start trainining by executing the following command:
 
     python -m src.deit_vis_loc.train_model \
-        --segments_dataset <PATH> \
-        --queries_meta     <PATH> \
-        --train_params     <PATH> \
-        --output           <PATH>
+        --dataset-dir  <DIR>  \
+        --metafile     <FILE> \
+        --train-params <FILE> \
+        --output-dir   <DIR>
 
 
 Usage for Model Evaluation [TODO]
