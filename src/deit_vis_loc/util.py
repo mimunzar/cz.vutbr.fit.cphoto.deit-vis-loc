@@ -59,15 +59,15 @@ def log(msg, start='', end='\n'):
     print(f'{start}[{d.strftime("%Y%m%dT%H%M%S")}] {msg}', end=end)
 
 
-def progress_bar(bar_width, total, curr):
-    curr = min(curr, total)
-    bar  = ('#'*round(curr/total*bar_width)).ljust(bar_width)
-    return f'[{bar}] {curr}/{total}'
-
-
 def format_fraction(n, d):
     d_len = len(str(d))
     return f'{n:>{d_len}}/{d}'
+
+
+def progress_bar(bar_width, total, curr):
+    curr = min(curr, total)
+    bar  = ('#'*round(curr/total*bar_width)).ljust(bar_width)
+    return f'[{bar}] {format_fraction(curr, total)}'
 
 
 def make_progress_formatter(bar_width, total):

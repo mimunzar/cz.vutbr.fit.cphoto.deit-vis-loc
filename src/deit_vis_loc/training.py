@@ -59,6 +59,15 @@ def forward(model, fn_transform, fpath):
     return model(fn_transform(fpath))
 
 
+def make_im_transform(device, input_size=224):
+    to_tensor = torchvision.transforms.Compose([
+        torchvision.transforms.Resize(input_size, interpolation=3),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
+    ])
+    return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
+
+
 def im_triplets(queries_meta, queries_it):
     seg_it = util.pluck(['positive', 'negative'], util.first(queries_meta.values()))
     return util.im_triplets(*map(len, util.prepend(queries_it, seg_it)))
@@ -85,11 +94,11 @@ def make_track_stats(stage, queries_meta, queries_it):
     return track_stats
 
 
-def train_batch(model_goods, margin, queries_meta, batches_total, batch_idx, queries_it):
+def train_batch(model_goods, train_params, queries_meta, batches_total, batch_idx, queries_it):
     stage_str = f'Batch {util.format_fraction(batch_idx, batches_total)}'
-    transform = util.memoize(model_goods['transform'])
+    transform = util.memoize(make_im_transform(model_goods['device'], train_params['input_size']))
     #^ Save re-computation of image tensors, but don't cache forwarding as the model is changing
-    iter_loss = make_iter_triplet_loss(margin, ft.partial(forward, model_goods['model'], transform))
+    iter_loss = make_iter_triplet_loss(train_params['triplet_margin'], ft.partial(forward, model_goods['model'], transform))
     loss_it   = map(ft.partial(backward, model_goods['optimizer']), iter_loss(queries_meta, queries_it))
     return ft.reduce(make_track_stats(stage_str, queries_meta, queries_it), loss_it, {'loss': 0, 'speed': 0})
 
@@ -108,7 +117,7 @@ def train_epoch(model_goods, train_params, queries_meta, queries_it):
     with torch.enable_grad():
         model_goods['model'].train()
         batches       = tuple(util.partition(train_params['batch_size'], queries_it))
-        batch_loss    = ft.partial(train_batch, model_goods, train_params['triplet_margin'], queries_meta, len(batches))
+        batch_loss    = ft.partial(train_batch, model_goods, train_params, queries_meta, len(batches))
         batch_loss_it = it.starmap(batch_loss, enumerate(batches, start=1))
         return ft.reduce(make_epoch_stats(), batch_loss_it, {'loss': 0, 'speed': 0})
 
@@ -118,9 +127,10 @@ def evaluate_epoch(model_goods, train_params, queries_meta, queries_it):
     with torch.no_grad():
         model_goods['model'].eval()
         eval_stats = make_track_stats('Eval', queries_meta, queries_it)
-        c_forward  = util.memoize(ft.partial(forward, model_goods['model'], model_goods['transform']))
+        transform  = make_im_transform(model_goods['device'], train_params['input_size'])
+        fwd        = util.memoize(ft.partial(forward, model_goods['model'], transform))
         #^ Saves re-computation of forwarding as the model is fixed during evaluation
-        iter_loss  = make_iter_triplet_loss(train_params['triplet_margin'], c_forward)
+        iter_loss  = make_iter_triplet_loss(train_params['triplet_margin'], fwd)
         return ft.reduce(eval_stats, iter_loss(queries_meta, queries_it), {'loss': 0, 'speed': 0})
 
 
@@ -166,7 +176,7 @@ def make_save_model(output_dir, train_params):
 def make_train_stats(model_goods, train_params, output_dpath):
     save_model = make_save_model(output_dpath, train_params)
     def train_stats(epoch, train, val, tspeed, vspeed, **rest):
-        util.log(f'Epoch {epoch} ended, tloss: {train:.2f}, vloss: {val:.2f},'
+        util.log(f'Epoch {epoch} ended, tloss: {train:.2f}, vloss: {val:.2f}, '
                + f'tspeed {tspeed:.2f}, vspeed {vspeed:.2f} im/s', start='\n', end='\n\n')
         save_model(model_goods['model'], epoch)
         return {**{'epoch': epoch, 'train': train, 'val': val}, **rest}
@@ -196,15 +206,6 @@ def eval_model(model_goods, fn_forward, queries_meta, queries_it):
         build_segment  = lambda q, s: {'name': s, **distance(q, s), **is_positive(q, s)}
         test_pairs     = iter_test_pairs(queries_meta, queries_it)
         return ({'query': q, 'segments': it.starmap(build_segment, p)} for q, p in test_pairs)
-
-
-def make_im_transform(device, input_size=224):
-    to_tensor = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(input_size, interpolation=3),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
-    ])
-    return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
 
 
 def eval(model_goods, queries_meta, queries_it):
