@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
 import sys
 
 import torch.hub
@@ -58,7 +57,7 @@ if __name__ == "__main__":
         'transform' : training.make_im_transform(device, train_params['input_size']),
     }
 
-    util.log(f'Started training on "{device_name(device)}" with {json.dumps(train_params, indent=4)}')
+    util.log(f'Started training on "{device_name(device)}"', end='\n\n')
     result = training.train(model_goods, train_params, queries_meta, query_images, args['output_dir'])
     util.log(f'Training ended with the best model in epoch {result["epoch"]}', start='\n')
 

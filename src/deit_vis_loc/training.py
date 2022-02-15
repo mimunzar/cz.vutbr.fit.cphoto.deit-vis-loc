@@ -3,6 +3,7 @@
 import collections as cl
 import functools   as ft
 import itertools   as it
+import json
 import operator    as op
 import os
 import random      as ra
@@ -70,7 +71,7 @@ def make_track_stats(stage, queries_meta, queries_it):
     avg_ims_sec = util.make_avg_ims_sec()
     formatter   = util.make_progress_formatter(bar_width=40, total=total_ims)
     ims, tps    = (0, 0)
-    print(f' {formatter(stage, ims, 0)}', end='\r')
+    print(f'{formatter(stage, ims, 0)}', end='\r')
     def track_stats(acc, loss):
         nonlocal ims, tps
         tps   = tps + 1
@@ -78,7 +79,7 @@ def make_track_stats(stage, queries_meta, queries_it):
         if 0 == tps % im_tps:
             ims   = ims + 1
             speed = avg_ims_sec(1)
-            print(f'\033[K {formatter(stage, ims, speed)}', end='\n' if ims == total_ims else '\r')
+            print(f'\033[K{formatter(stage, ims, speed)}', end='\n' if ims == total_ims else '\r')
         return {'loss': acc['loss'] + float(loss), 'speed': speed}
         #^ Don't accumulate autograd history, hence cast the Variable to float
     return track_stats
@@ -147,14 +148,18 @@ def make_is_learning(patience, min_delta):
     return is_training
 
 
-def make_save_model(save_dpath, params):
-    time_str  = datetime.fromtimestamp(util.epoch_secs()).strftime('%Y%m%dT%H%M%S')
-    param_str = '-'.join(str(params[k]) for k in ['deit_model', 'batch_size'])
+def make_save_model(output_dir, train_params):
+    os.makedirs(output_dir, exist_ok=True)
+    time = datetime.fromtimestamp(util.epoch_secs()).strftime('%Y%m%dT%H%M%S')
+    model, batch_size = util.pluck(['deit_model', 'batch_size'], train_params)
+    params_name       = f'{time}-{model}-{batch_size}'
+    with open(os.path.join(output_dir, f'{params_name}.json'), 'w') as f:
+        json.dump(train_params, f, indent=4)
+
     def save_model(model, epoch):
-        os.makedirs(save_dpath, exist_ok=True)
         epoch_str      = str(epoch).zfill(3)
-        model_filename = '-'.join([time_str, param_str, epoch_str]) + '.torch'
-        torch.save(model, os.path.join(save_dpath, model_filename))
+        model_filename = f'{params_name}-{epoch_str}.torch'
+        torch.save(model, os.path.join(output_dir, model_filename))
     return save_model
 
 
