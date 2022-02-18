@@ -25,23 +25,37 @@ def test_partition_by():
 
 
 def test_prepend():
-    assert list(util.prepend(1, [])) == [1]
-    assert list(util.prepend(1, [2, 3])) == [1, 2, 3]
+    assert list(util.prepend(1, []))           == [1]
+    assert list(util.prepend(1, [2, 3]))       == [1, 2, 3]
     assert list(util.prepend(1, iter([2, 3]))) == [1, 2, 3]
+
+
+def test_take():
+    assert list(util.take(None, [1, 2, 3])) == []
+    assert list(util.take(0,    [1, 2, 3])) == []
+    assert list(util.take(2,    [1, 2, 3])) == [1, 2]
+    assert list(util.take(42,   [1, 2, 3])) == [1, 2, 3]
+
+
+def test_drop():
+    assert list(util.drop(None, [1, 2, 3])) == [1, 2, 3]
+    assert list(util.drop(0,    [1, 2, 3])) == [1, 2, 3]
+    assert list(util.drop(2,    [1, 2, 3])) == [3]
+    assert list(util.drop(42,   []))        == []
 
 
 def test_first():
     with pytest.raises(StopIteration): util.first([])
-    assert util.first([1, 2]) == 1
-    assert util.first((1, 2)) == 1
+    assert util.first([1, 2])       == 1
+    assert util.first((1, 2))       == 1
     assert util.first(iter([1, 2])) == 1
 
 
-def test_take():
-    assert list(util.take(3, [])) == []
-    assert list(util.take(0, [1, 2, 3])) == []
-    assert list(util.take(2, [1, 2, 3])) == [1, 2]
-    assert list(util.take(None, [1, 2, 3])) == [1, 2, 3]
+def test_nth():
+    with pytest.raises(StopIteration): util.nth(2, [])
+    assert util.nth(2, [1, 2, 3])       == 3
+    assert util.nth(2, (1, 2, 3))       == 3
+    assert util.nth(2, iter([1, 2, 3])) == 3
 
 
 def test_flatten():
@@ -69,9 +83,9 @@ def test_checker():
         'foo': util.make_validator('Failed foo', lambda x: x > 0),
         'bar': util.make_validator('Failed bar', lambda x: x > 0),
     })
-    assert checker({'foo': 0, 'bar': 0, 'baz': 0}) == ['Failed foo', 'Failed bar']
-    assert checker({'foo': 0, 'bar': 1, 'baz': 0}) == ['Failed foo']
-    assert checker({'foo': 1, 'bar': 1, 'baz': 0}) == []
+    assert checker({'foo': 0, 'bar': 0, 'baz': 0}) == ('Failed foo', 'Failed bar',)
+    assert checker({'foo': 0, 'bar': 1, 'baz': 0}) == ('Failed foo',)
+    assert checker({'foo': 1, 'bar': 1, 'baz': 0}) == tuple()
 
 
 def test_print_progress():

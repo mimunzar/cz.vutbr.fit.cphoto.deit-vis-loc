@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import functools as fp
 import os
 import sys
 
@@ -39,20 +40,48 @@ def parse_args(args_it):
     return vars(parser.parse_args(args_it))
 
 
+def allocate_model_for_process_on_gpu(pid, model):
+    device = f'cuda:{pid}'
+    torch.cuda.set_device(pid)
+    model.cuda(device)
+    model  = torch.nn.parallel.DistributedDataParallel(model, device_ids=[pid])
+    return (model, device)
+
+
+def allocate_model_for_process_on_cpu(model):
+    device = 'cpu'
+    model  = torch.nn.parallel.DistributedDataParallel(model, device_ids=None)
+    return (model, device)
+
+
+def allocate_model_for_process(pid, model, device):
+    if device.startswith('cuda'):
+        return allocate_model_for_process_on_gpu(pid, model)
+    return allocate_model_for_process_on_cpu(model)
+
+
+def init_process(pid, nprocs, device):
+    backend = 'nccl' if device.startswith('cuda') else 'gloo'
+    torch.distributed.init_process_group(backend, rank=pid, world_size=nprocs)
+
+
 def device_name(device):
-    return torch.cuda.get_device_name(device) if device.startswith('cuda') else 'CPU'
+    if device.startswith('cuda'):
+        return torch.cuda.get_device_name(device)
+    return 'CPU'
 
 
-def comm_backend(device):
-    return 'nccl' if device.startswith('cuda') else 'gloo'
+def training_process(model, device, train_params, queries_meta, val_queries_it, output_dir, pid, nprocs, train_partitions):
+    init_process(pid, nprocs, device)
+    model, device = allocate_model_for_process(pid, model, device)
+    optimizer     = torch.optim.Adam(model.parameters(), train_params['learning_rate'])
+    model_goods   = {'model': model, 'device': device, 'optimizer': optimizer}
+    query_images  = {'train': util.nth(pid, train_partitions), 'val': val_queries_it}
 
-
-def worker(pid, nprocs, model_goods, train_params, queries_meta, query_images, output_dir):
-    torch.distributed.init_process_group(comm_backend(model_goods['device']), rank=pid, world_size=nprocs)
-    util.log(f'Started training on "{device_name(model_goods["device"])}"', end='\n\n')
-    result = training.train(model_goods, train_params, queries_meta, query_images, output_dir)
+    util.log(f'Started training on "{device_name(device)}"', end='\n\n')
+    result = training.train(pid, model_goods, train_params, queries_meta, query_images, output_dir)
     util.log(f'Training ended with the best model in epoch {result["epoch"]}', start='\n')
-    return 0
+    return result
 
 
 if __name__ == "__main__":
@@ -63,25 +92,17 @@ if __name__ == "__main__":
         assert args['workers'] <= torch.cuda.device_count(), 'Not enough GPUs'
 
     train_params = data.read_train_params(args['train_params'])
-    queries_meta = data.read_queries_metadata(args['metafile'],
-            args['dataset_dir'], train_params['yaw_tolerance_deg'])
+    queries_meta = data.read_queries_metadata(args['metafile'], args['dataset_dir'], train_params['yaw_tolerance_deg'])
     iter_queries = lambda f: data.read_query_imgs(args['dataset_dir'], f)
-    query_images = {
-        'train': set(util.take(args['dataset_size'], iter_queries('train.txt'))),
-        'val'  : set(util.take(args['dataset_size'], iter_queries('val.txt'))),
-    }
 
-    model = torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True)
-    model.to(args['device'])
-    model_goods = {
-        'model'     : model,
-        'device'    : args['device'],
-        'optimizer' : torch.optim.Adam(model.parameters(), train_params['learning_rate']),
-    }
+    model            = torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True)
+    val_queries_it   = set(util.take(args['dataset_size'], iter_queries('val.txt')))
+    train_queries_it = set(util.take(args['dataset_size'], iter_queries('train.txt')))
+    train_partitions = tuple(map(tuple, util.partition(len(train_queries_it)//args['workers'], train_queries_it)))
+    train_process     = fp.partial(training_process,
+            model, args['device'], train_params, queries_meta, val_queries_it, args['output_dir'])
 
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "29501"
-    torch.multiprocessing.spawn(worker, nprocs=args['workers'], args=(
-        args['workers'], model_goods, train_params, queries_meta, query_images, args['output_dir']))
-    sys.exit(0)
+    torch.multiprocessing.spawn(train_process, nprocs=args['workers'], args=(args['workers'], train_partitions))
 

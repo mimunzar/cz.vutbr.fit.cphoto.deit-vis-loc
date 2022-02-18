@@ -23,12 +23,24 @@ def prepend(x, iterable):
     return it.chain([x], iterable)
 
 
+def take(n, iterable):
+    return it.islice(iterable, n if n is not None else 0)
+
+
+def drop(n, iterable):
+    return it.islice(iterable, n, None)
+
+
 def first(iterable):
     return next(iter(iterable))
 
 
-def take(n, iterable):
-    return it.islice(iterable, n)
+def nth(n, iterable):
+    return first(drop(n, iterable))
+
+
+def second(iterable):
+    return nth(1, iterable)
 
 
 def flatten(iterable):
@@ -48,9 +60,9 @@ def make_validator(msg, fn_valid):
 
 
 def make_checker(validators):
-    def check_dict(to_check):
-        vals = [fn_val(to_check[k]) for k, fn_val in validators.items()]
-        return [msg for succ, msg in vals if not succ]
+    def check_dict(d):
+        checks = it.starmap(lambda k, f: f(d[k]), validators.items())
+        return tuple(map(second, it.filterfalse(first, checks)))
     return check_dict
 
 

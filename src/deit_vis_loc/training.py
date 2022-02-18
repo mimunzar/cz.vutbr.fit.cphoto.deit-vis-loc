@@ -173,8 +173,8 @@ def make_save_model(output_dir, train_params):
     return save_model
 
 
-def make_train_stats(model_goods, train_params, output_dpath):
-    save_model = make_save_model(output_dpath, train_params)
+def make_train_stats(pid, model_goods, train_params, output_dpath):
+    save_model = make_save_model(output_dpath, train_params) if 0 == pid else lambda *_: None
     def train_stats(epoch, train, val, tspeed, vspeed, **rest):
         util.log(f'Epoch {epoch} ended, tloss: {train:.2f}, vloss: {val:.2f}, '
                + f'tspeed {tspeed:.2f}, vspeed {vspeed:.2f} im/s', start='\n', end='\n\n')
@@ -183,19 +183,19 @@ def make_train_stats(model_goods, train_params, output_dpath):
     return train_stats
 
 
-def train(model_goods, train_params, queries_meta, query_images, output_dpath):
-    train_stats = make_train_stats(model_goods, train_params, output_dpath)
+def train(pid, model_goods, train_params, queries_meta, query_images, output_dpath):
+    train_stats = make_train_stats(pid, model_goods, train_params, output_dpath)
     is_learning = make_is_learning(train_params['stopping_patience'], min_delta=0.01)
     training_it = iter_training(model_goods, train_params, queries_meta, query_images)
     learning_it = it.takewhile(is_learning, util.take(train_params['max_epochs'], training_it))
-    return min(map(lambda d: train_stats(**d), learning_it), key=lambda losses: losses['val'])
+    return min(map(lambda d: train_stats(**d), learning_it), key=ft.partial(util.pluck, ['val']))
 
 
 def iter_test_pairs(queries_meta, queries_it):
     query_segments = lambda q: util.flatten(queries_meta[q].values())
     segments       = set(util.flatten(map(query_segments, queries_it)))
     product        = it.product(queries_it, segments)
-    return ((q, set(p)) for q, p in it.groupby(product, op.itemgetter(0)))
+    return ((q, set(p)) for q, p in it.groupby(product, util.first))
 
 
 def eval_model(model_goods, fn_forward, queries_meta, queries_it):
