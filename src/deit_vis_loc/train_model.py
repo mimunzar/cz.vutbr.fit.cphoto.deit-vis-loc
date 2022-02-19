@@ -2,17 +2,22 @@
 
 import argparse
 import functools as fp
+import json
 import os
 import sys
+from datetime import datetime
 
+import torch
 import torch.cuda
 import torch.distributed
 import torch.hub
 import torch.multiprocessing.spawn
 import torch.nn.parallel
 import torch.optim
-import torch.nn
-from safe_gpu import safe_gpu
+import torchvision.transforms
+from PIL                 import Image
+from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from safe_gpu            import safe_gpu
 
 import src.deit_vis_loc.data     as data
 import src.deit_vis_loc.training as training
@@ -40,24 +45,24 @@ def parse_args(args_it):
     return vars(parser.parse_args(args_it))
 
 
-def allocate_model_for_process_on_gpu(pid, model):
+def allocate_network_for_process_on_gpu(net, pid):
     device = f'cuda:{pid}'
     torch.cuda.set_device(pid)
-    model.cuda(device)
-    model  = torch.nn.parallel.DistributedDataParallel(model, device_ids=[pid])
-    return (model, device)
+    net.cuda(device)
+    net  = torch.nn.parallel.DistributedDataParallel(net, device_ids=[pid])
+    return (net, device)
 
 
-def allocate_model_for_process_on_cpu(model):
+def allocate_network_for_process_on_cpu(net):
     device = 'cpu'
-    model  = torch.nn.parallel.DistributedDataParallel(model, device_ids=None)
-    return (model, device)
+    net  = torch.nn.parallel.DistributedDataParallel(net, device_ids=None)
+    return (net, device)
 
 
-def allocate_model_for_process(pid, model, device):
+def allocate_network_for_process(net, pid, device):
     if device.startswith('cuda'):
-        return allocate_model_for_process_on_gpu(pid, model)
-    return allocate_model_for_process_on_cpu(model)
+        return allocate_network_for_process_on_gpu(net, pid)
+    return allocate_network_for_process_on_cpu(net)
 
 
 def init_process(pid, nprocs, device):
@@ -71,16 +76,45 @@ def device_name(device):
     return 'CPU'
 
 
-def training_process(model, device, train_params, queries_meta, val_queries_it, output_dir, pid, nprocs, train_partitions):
-    init_process(pid, nprocs, device)
-    model, device = allocate_model_for_process(pid, model, device)
-    optimizer     = torch.optim.Adam(model.parameters(), train_params['learning_rate'])
-    model_goods   = {'model': model, 'device': device, 'optimizer': optimizer}
-    query_images  = {'train': util.nth(pid, train_partitions), 'val': val_queries_it}
+def make_im_transform(device, input_size=224):
+    to_tensor = torchvision.transforms.Compose([
+        torchvision.transforms.Resize(input_size, interpolation=3),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
+    ])
+    return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
 
-    util.log(f'Started training on "{device_name(device)}"', end='\n\n')
-    result = training.train(pid, model_goods, train_params, queries_meta, query_images, output_dir)
-    util.log(f'Training ended with the best model in epoch {result["epoch"]}', start='\n')
+
+def make_save_net(net, train_params, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
+    dtime           = datetime.fromtimestamp(util.epoch_secs()).strftime('%Y%m%dT%H%M%S')
+    net, batch_size = util.pluck(['deit_model', 'batch_size'], train_params)
+    params_name     = f'{dtime}-{net}-{batch_size}'
+    with open(os.path.join(output_dir, f'{params_name}.json'), 'w') as f:
+        json.dump(train_params, f, indent=4)
+
+    def save_net(epoch):
+        epoch_str = str(epoch).zfill(3)
+        torch.save(net, os.path.join(output_dir, f'{params_name}-{epoch_str}.torch'))
+    return save_net
+
+
+def training_process(net, device, train_params, queries_meta, val_queries_it, output_dir, pid, nprocs, train_partitions):
+    init_process(pid, nprocs, device)
+    net, device = allocate_network_for_process(net, pid, device)
+    model       = {
+        'net'       : net,
+        'device'    : device,
+        'optimizer' : torch.optim.Adam(net.parameters(), train_params['learning_rate']),
+        'transform' : make_im_transform(device, train_params['input_size']),
+        'save_net'  : make_save_net(net, train_params, output_dir) if 0 == pid else lambda *_: None,
+    }
+    query_images = {'train': util.nth(pid, train_partitions), 'val': val_queries_it}
+
+    logfile=sys.stdout
+    util.log(f'Started training on "{device_name(device)}"\n\n', file=logfile)
+    result = training.train(model, train_params, logfile, queries_meta, query_images)
+    util.log(f'Training ended with the best net in epoch {result["epoch"]}', start='\n', file=logfile)
     return result
 
 
@@ -95,12 +129,12 @@ if __name__ == "__main__":
     queries_meta = data.read_queries_metadata(args['metafile'], args['dataset_dir'], train_params['yaw_tolerance_deg'])
     iter_queries = lambda f: data.read_query_imgs(args['dataset_dir'], f)
 
-    model            = torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True)
+    net              = torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True)
     val_queries_it   = set(util.take(args['dataset_size'], iter_queries('val.txt')))
     train_queries_it = set(util.take(args['dataset_size'], iter_queries('train.txt')))
-    train_partitions = tuple(map(tuple, util.partition(len(train_queries_it)//args['workers'], train_queries_it)))
-    train_process     = fp.partial(training_process,
-            model, args['device'], train_params, queries_meta, val_queries_it, args['output_dir'])
+    train_partitions = tuple(util.partition(len(train_queries_it)//args['workers'], train_queries_it))
+    train_process    = fp.partial(training_process,
+            net, args['device'], train_params, queries_meta, val_queries_it, args['output_dir'])
 
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "29501"

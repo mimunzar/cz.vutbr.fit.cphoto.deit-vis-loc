@@ -6,6 +6,7 @@ import itertools as it
 import math      as ma
 import operator  as op
 import time
+import sys
 
 
 def partition(n, iterable):
@@ -66,9 +67,9 @@ def make_checker(validators):
     return check_dict
 
 
-def log(msg, start='', end='\n'):
+def log(msg, start='', end='\n', file=sys.stdout):
     d = dt.datetime.now(tz=dt.timezone.utc)
-    print(f'{start}[{d.strftime("%Y%m%dT%H%M%S")}] {msg}', end=end)
+    print(f'{start}[{d.strftime("%Y%m%dT%H%M%S")}] {msg}', end=end, file=file)
 
 
 def format_fraction(n, d):
