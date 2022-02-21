@@ -64,7 +64,7 @@ def make_track_stats(logfile, stage, queries_meta, queries_it):
     avg_ims_sec = util.make_avg_ims_sec()
     formatter   = util.make_progress_formatter(bar_width=40, total=total_ims)
     ims, tps    = (0, 0)
-    print(f'{formatter(stage, ims, 0)}', end='\r', file=logfile)
+    print(f'{formatter(stage, ims, 0)}', end='\r', file=logfile, flush=True)
     def track_stats(acc, loss):
         nonlocal ims, tps
         tps   = tps + 1
@@ -72,7 +72,8 @@ def make_track_stats(logfile, stage, queries_meta, queries_it):
         if 0 == tps % im_tps:
             ims   = ims + 1
             speed = avg_ims_sec(1)
-            print(f'\033[K{formatter(stage, ims, speed)}', end='\n' if ims == total_ims else '\r', file=logfile)
+            end   = '\n' if ims == total_ims else '\r'
+            print(f'\033[K{formatter(stage, ims, speed)}', end=end, file=logfile, flush=True)
         return {'loss': acc['loss'] + float(loss), 'speed': speed}
         #^ Don't accumulate autograd history, hence cast the Variable to float
     return track_stats

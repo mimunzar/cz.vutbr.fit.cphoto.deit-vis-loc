@@ -85,37 +85,37 @@ def make_im_transform(device, input_size=224):
     return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
 
 
-def make_save_net(net, train_params, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
-    dtime           = datetime.fromtimestamp(util.epoch_secs()).strftime('%Y%m%dT%H%M%S')
-    net, batch_size = util.pluck(['deit_model', 'batch_size'], train_params)
-    params_name     = f'{dtime}-{net}-{batch_size}'
-    with open(os.path.join(output_dir, f'{params_name}.json'), 'w') as f:
-        json.dump(train_params, f, indent=4)
-
+def make_save_net(net, fileprefix, output_dir):
     def save_net(epoch):
         epoch_str = str(epoch).zfill(3)
-        torch.save(net, os.path.join(output_dir, f'{params_name}-{epoch_str}.torch'))
+        torch.save(net, os.path.join(output_dir, f'{fileprefix}-{epoch_str}.torch'))
     return save_net
 
 
-def training_process(net, device, train_params, queries_meta, val_queries_it, output_dir, pid, nprocs, train_partitions):
-    init_process(pid, nprocs, device)
-    net, device = allocate_network_for_process(net, pid, device)
-    model       = {
+def training_process(train_params, queries_meta, pid, procinit):
+    init_process(pid, procinit['nprocs'], procinit['device'])
+    net, device  = allocate_network_for_process(procinit['net'], pid, procinit['device'])
+    prefix, odir = util.pluck(['fileprefix', 'output_dir'], procinit)
+    model        = {
         'net'       : net,
         'device'    : device,
         'optimizer' : torch.optim.Adam(net.parameters(), train_params['learning_rate']),
         'transform' : make_im_transform(device, train_params['input_size']),
-        'save_net'  : make_save_net(net, train_params, output_dir) if 0 == pid else lambda *_: None,
+        'save_net'  : make_save_net(net, prefix, odir) if 0 == pid else lambda *_: None,
     }
-    query_images = {'train': util.nth(pid, train_partitions), 'val': val_queries_it}
+    query_images = {'train': util.nth(pid, procinit['train_parts_it']), 'val': procinit['vqueries_it']}
 
-    logfile=sys.stdout
-    util.log(f'Started training on "{device_name(device)}"\n\n', file=logfile)
-    result = training.train(model, train_params, logfile, queries_meta, query_images)
-    util.log(f'Training ended with the best net in epoch {result["epoch"]}', start='\n', file=logfile)
-    return result
+    with open(os.path.join(odir, f'{prefix}-{pid}.log'), 'w') as logfile:
+        util.log(f'Started training on "{device_name(device)}"\n\n', file=logfile)
+        result = training.train(model, train_params, logfile, queries_meta, query_images)
+        util.log(f'Training ended with the best net in epoch {result["epoch"]}', start='\n', file=logfile)
+        return result
+
+
+def params_to_name(epoch_secs, train_params):
+    timestr         = datetime.fromtimestamp(epoch_secs).strftime('%Y%m%dT%H%M%S')
+    net, batch_size = util.pluck(['deit_model', 'batch_size'], train_params)
+    return f'{timestr}-{net}-{batch_size}'
 
 
 if __name__ == "__main__":
@@ -127,16 +127,27 @@ if __name__ == "__main__":
 
     train_params = data.read_train_params(args['train_params'])
     queries_meta = data.read_queries_metadata(args['metafile'], args['dataset_dir'], train_params['yaw_tolerance_deg'])
-    iter_queries = lambda f: data.read_query_imgs(args['dataset_dir'], f)
+    worker       = fp.partial(training_process, train_params, queries_meta)
 
-    net              = torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True)
-    val_queries_it   = set(util.take(args['dataset_size'], iter_queries('val.txt')))
-    train_queries_it = set(util.take(args['dataset_size'], iter_queries('train.txt')))
-    train_partitions = tuple(util.partition(len(train_queries_it)//args['workers'], train_queries_it))
-    train_process    = fp.partial(training_process,
-            net, args['device'], train_params, queries_meta, val_queries_it, args['output_dir'])
+    iter_queries = lambda f: data.read_query_imgs(args['dataset_dir'], f)
+    tqueries_it  = set(util.take(args['dataset_size'], iter_queries('train.txt')))
+    fileprefix   = params_to_name(util.epoch_secs(), train_params)
+    procinit     = {
+        'nprocs'    : args['workers'],
+        'output_dir': args['output_dir'],
+        'fileprefix': fileprefix,
+
+        'net'            : torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True),
+        'device'         : args['device'],
+        'vqueries_it'    : set(util.take(args['dataset_size'], iter_queries('val.txt'))),
+        'train_parts_it' : tuple(util.partition(len(tqueries_it)//args['workers'], tqueries_it))
+    }
+
+    os.makedirs(args['output_dir'], exist_ok=True)
+    with open(os.path.join(args['output_dir'], f'{fileprefix}.json'), 'w') as f:
+        json.dump(train_params, f, indent=4)
 
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "29501"
-    torch.multiprocessing.spawn(train_process, nprocs=args['workers'], args=(args['workers'], train_partitions))
+    torch.multiprocessing.spawn(worker, nprocs=procinit['nprocs'], args=(procinit,))
 
