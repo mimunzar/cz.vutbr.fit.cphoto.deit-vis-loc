@@ -92,22 +92,22 @@ def test_iter_triplet_loss():
 
 def test_early_stopping():
     it_learning = training.make_is_learning(0, 0)
-    assert it_learning({'val': 0}) == False
+    assert it_learning({'vloss': 0}) == False
     #^ Not having patience means to stop immediately
 
     it_learning = training.make_is_learning(1, .1)
-    assert it_learning({'val': 3.00}) == True
-    assert it_learning({'val': 2.91}) == False
+    assert it_learning({'vloss': 3.00}) == True
+    assert it_learning({'vloss': 2.91}) == False
     #^ Validation loss doesn't decrease more than delta
 
     it_learning = training.make_is_learning(2, 0)
-    assert it_learning({'val': 3}) == True
-    assert it_learning({'val': 2}) == True
-    assert it_learning({'val': 1}) == True
-    assert it_learning({'val': 2}) == True
-    assert it_learning({'val': 0}) == True
-    assert it_learning({'val': 1}) == True
-    assert it_learning({'val': 2}) == False
+    assert it_learning({'vloss': 3}) == True
+    assert it_learning({'vloss': 2}) == True
+    assert it_learning({'vloss': 1}) == True
+    assert it_learning({'vloss': 2}) == True
+    assert it_learning({'vloss': 0}) == True
+    assert it_learning({'vloss': 1}) == True
+    assert it_learning({'vloss': 2}) == False
     #^ Patience over multiple losses
 
 

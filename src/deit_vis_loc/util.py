@@ -12,7 +12,7 @@ import sys
 def partition(n, iterable):
     iterable = iter(iterable)
     return it.takewhile(lambda l: len(l) == n,
-            (tuple(it.islice(iterable, n)) for _ in it.repeat(None)))
+            (tuple(take(n, iterable)) for _ in it.repeat(None)))
 
 
 def partition_by(pred, iterable):

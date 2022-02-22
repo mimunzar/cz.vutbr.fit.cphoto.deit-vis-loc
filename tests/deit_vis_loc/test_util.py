@@ -53,8 +53,8 @@ def test_first():
 
 def test_nth():
     with pytest.raises(StopIteration): util.nth(2, [])
-    assert util.nth(2, [1, 2, 3])       == 3
-    assert util.nth(2, (1, 2, 3))       == 3
+    assert util.nth(0, [1, 2, 3])       == 1
+    assert util.nth(1, (1, 2, 3))       == 2
     assert util.nth(2, iter([1, 2, 3])) == 3
 
 

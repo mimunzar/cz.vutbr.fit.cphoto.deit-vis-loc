@@ -17,7 +17,6 @@ import torch.optim
 import torchvision.transforms
 from PIL                 import Image
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from safe_gpu            import safe_gpu
 
 import src.deit_vis_loc.data     as data
 import src.deit_vis_loc.training as training
@@ -76,7 +75,7 @@ def device_name(device):
     return 'CPU'
 
 
-def make_im_transform(device, input_size=224):
+def make_im_transform(device, input_size):
     to_tensor = torchvision.transforms.Compose([
         torchvision.transforms.Resize(input_size, interpolation=3),
         torchvision.transforms.ToTensor(),
@@ -121,6 +120,7 @@ def params_to_name(epoch_secs, train_params):
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     if args['sge']:
+        from safe_gpu import safe_gpu
         gpu_owner = safe_gpu.GPUOwner(nb_gpus=args['workers'])
     if args['device'].startswith('cuda'):
         assert args['workers'] <= torch.cuda.device_count(), 'Not enough GPUs'
