@@ -83,7 +83,7 @@ def train_batch(model, train_params, logfile, queries_meta, batches_total, batch
     stage_str = f'Batch {util.format_fraction(batch_idx, batches_total)}'
     transform = util.memoize(model['transform'])
     #^ Save re-computation of image tensors, but don't cache forwarding as network is changing
-    iter_loss = make_iter_triplet_loss(train_params['triplet_margin'], ft.partial(forward, model['net'], transform))
+    iter_loss = make_iter_triplet_loss(train_params['margin'], ft.partial(forward, model['net'], transform))
     loss_it   = map(ft.partial(backward, model['optimizer']), iter_loss(queries_meta, queries_it))
     return ft.reduce(make_track_stats(logfile, stage_str, queries_meta, queries_it), loss_it, {'loss': 0, 'speed': 0})
 
@@ -114,7 +114,7 @@ def evaluate_epoch(model, train_params, logfile, queries_meta, queries_it):
         stats     = make_track_stats(logfile, 'Eval', queries_meta, queries_it)
         fwd       = util.memoize(ft.partial(forward, model['net'], model['transform']))
         #^ Saves re-computation of forwarding as network is fixed during evaluation
-        iter_loss = make_iter_triplet_loss(train_params['triplet_margin'], fwd)
+        iter_loss = make_iter_triplet_loss(train_params['margin'], fwd)
         return ft.reduce(stats, iter_loss(queries_meta, queries_it), {'loss': 0, 'speed': 0})
 
 

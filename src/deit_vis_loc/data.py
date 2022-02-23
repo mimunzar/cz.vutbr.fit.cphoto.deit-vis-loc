@@ -63,7 +63,7 @@ def parse_train_params(train_params):
         'resnet_model'      : util.make_validator('resnet_model must be a non-empty string', is_nonempty_or_null),
         'input_size'        : util.make_validator('input size (resolution) must be a positive int', is_positive_int),
         'max_epochs'        : util.make_validator('max_epochs must be a positive int', is_positive_int),
-        'triplet_margin'    : util.make_validator('triplet_margin must be positive', is_positive),
+        'margin'            : util.make_validator('margin must be positive', is_positive),
         'learning_rate'     : util.make_validator('learning_rate must be positive', is_positive),
         'stopping_patience' : util.make_validator('stopping_patience must be positive', is_positive),
         'yaw_tolerance_deg' : util.make_validator('yaw_tolerance_deg must be an int', is_int),
