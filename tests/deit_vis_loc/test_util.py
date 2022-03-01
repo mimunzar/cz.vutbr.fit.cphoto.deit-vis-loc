@@ -31,7 +31,7 @@ def test_prepend():
 
 
 def test_take():
-    assert list(util.take(None, [1, 2, 3])) == []
+    assert list(util.take(None, [1, 2, 3])) == [1, 2, 3]
     assert list(util.take(0,    [1, 2, 3])) == []
     assert list(util.take(2,    [1, 2, 3])) == [1, 2]
     assert list(util.take(42,   [1, 2, 3])) == [1, 2, 3]

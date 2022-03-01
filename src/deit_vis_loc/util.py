@@ -25,7 +25,7 @@ def prepend(x, iterable):
 
 
 def take(n, iterable):
-    return it.islice(iterable, n if n is not None else 0)
+    return it.islice(iterable, n)
 
 
 def drop(n, iterable):

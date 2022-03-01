@@ -11,36 +11,38 @@ import torch.distributed
 import src.deit_vis_loc.util as util
 
 
-def make_triplets(queries_meta, queries_it):
+def iter_im_triplets(queries_meta, queries_it):
     query_segments = lambda q: util.flatten(queries_meta[q].values())
     segments       = set(util.flatten(map(query_segments, queries_it)))
-    def triplets(query):
+    def iter_im_triplets(query):
         query_pos = queries_meta[query]['positive']
         query_neg = segments - query_pos
         return it.product({query}, query_pos, query_neg)
-    return triplets
+    return map(iter_im_triplets, queries_it)
 
 
-def iter_triplets(queries_meta, queries_it):
-    triplets = make_triplets(queries_meta, queries_it)
-    labels   = lambda q, p, n: {'anchor': q, 'positive': p, 'negative': n}
-    return it.starmap(labels, util.flatten(map(triplets, queries_it)))
-
-
-def triplet_loss(margin, fn_forward, triplet):
-    a_embed = fn_forward(triplet['anchor'])
-    a_p_dis = torch.cdist(a_embed, fn_forward(triplet['positive']))
-    a_n_dis = torch.cdist(a_embed, fn_forward(triplet['negative']))
+def triplet_loss(margin, fn_fwd, anchor, pos, neg):
+    a_embed = fn_fwd(anchor)
+    a_p_dis = torch.cdist(a_embed, fn_fwd(pos))
+    a_n_dis = torch.cdist(a_embed, fn_fwd(neg))
     result  = a_p_dis - a_n_dis + margin
     result[0 > result] = 0
     return result
 
 
-def make_iter_triplet_loss(margin, fn_forward, fn_iter_triplets=iter_triplets):
-    loss = ft.partial(triplet_loss, margin, fn_forward)
-    def iter_triplet_loss(queries_meta, queries_it):
-        return map(loss, fn_iter_triplets(queries_meta, queries_it))
-    return iter_triplet_loss
+def iter_hard_im_triplets(n_im_tp, fn_tp_loss, queries_meta, queries_it):
+    def iter_hard_triplets(triplets_it):
+        with torch.no_grad():
+            loss_it = map(lambda t: (t, float(fn_tp_loss(*t))), triplets_it)
+            hard_it = map(util.first, sorted(loss_it, key=util.second, reverse=True))
+            return tuple(util.take(n_im_tp, hard_it))
+    return map(iter_hard_triplets, iter_im_triplets(queries_meta, queries_it))
+
+
+def iter_triplet_loss(train_params, fn_fwd, queries_meta, queries_it):
+    tp_loss  = ft.partial(triplet_loss, train_params['margin'], util.memoize(fn_fwd))
+    im_tp_it = iter_hard_im_triplets(train_params['im_datapoints'], tp_loss, queries_meta, queries_it)
+    return it.starmap(ft.partial(triplet_loss, train_params['margin'], fn_fwd), util.flatten(im_tp_it))
 
 
 def backward(optimizer, loss):
@@ -52,15 +54,9 @@ def forward(net, fn_transform, fpath):
     return net(fn_transform(fpath))
 
 
-def im_triplets(queries_meta, queries_it):
-    seg_it = util.pluck(['positive', 'negative'], util.first(queries_meta.values()))
-    return util.im_triplets(*map(len, util.prepend(queries_it, seg_it)))
-
-
-def make_track_stats(logfile, stage, queries_meta, queries_it):
+def make_track_stats(logfile, stage, queries_it, n_im_tp):
     queries_it  = tuple(queries_it)
     total_ims   = len(queries_it)
-    im_tps      = im_triplets(queries_meta, queries_it)
     avg_ims_sec = util.make_avg_ims_sec()
     formatter   = util.make_progress_formatter(bar_width=40, total=total_ims)
     ims, tps    = (0, 0)
@@ -69,7 +65,7 @@ def make_track_stats(logfile, stage, queries_meta, queries_it):
         nonlocal ims, tps
         tps   = tps + 1
         speed = acc['speed']
-        if 0 == tps % im_tps:
+        if 0 == tps % n_im_tp:
             ims   = ims + 1
             speed = avg_ims_sec(1)
             end   = '\n' if ims == total_ims else '\r'
@@ -80,12 +76,12 @@ def make_track_stats(logfile, stage, queries_meta, queries_it):
 
 
 def train_batch(model, train_params, logfile, queries_meta, batches_total, batch_idx, queries_it):
-    stage_str = f'Batch {util.format_fraction(batch_idx, batches_total)}'
-    transform = util.memoize(model['transform'])
-    #^ Save re-computation of image tensors, but don't cache forwarding as network is changing
-    iter_loss = make_iter_triplet_loss(train_params['margin'], ft.partial(forward, model['net'], transform))
-    loss_it   = map(ft.partial(backward, model['optimizer']), iter_loss(queries_meta, queries_it))
-    return ft.reduce(make_track_stats(logfile, stage_str, queries_meta, queries_it), loss_it, {'loss': 0, 'speed': 0})
+    bwd     = ft.partial(backward, model['optimizer'])
+    fwd     = ft.partial(forward, model['net'], util.memoize(model['transform']))
+    loss_it = map(bwd, iter_triplet_loss(train_params, fwd, queries_meta, queries_it))
+    stage   = f'Batch {util.format_fraction(batch_idx, batches_total)}'
+    stats   = make_track_stats(logfile, stage, queries_it, train_params['im_datapoints'])
+    return ft.reduce(stats, loss_it, {'loss': 0, 'speed': 0})
 
 
 def make_epoch_stats():
@@ -98,7 +94,6 @@ def make_epoch_stats():
 
 
 def train_epoch(model, train_params, logfile, queries_meta, queries_it):
-    queries_it = tuple(queries_it)
     with torch.enable_grad():
         model['net'].train()
         batches       = tuple(util.partition(train_params['batch_size'], queries_it))
@@ -107,15 +102,20 @@ def train_epoch(model, train_params, logfile, queries_meta, queries_it):
         return ft.reduce(make_epoch_stats(), batch_loss_it, {'loss': 0, 'speed': 0})
 
 
+def n_im_triplets(queries_meta, queries_it):
+    p_n_it = util.pluck(['positive', 'negative'], util.first(queries_meta.values()))
+    return util.im_triplets(*map(len, util.prepend(queries_it, p_n_it)))
+
+
 def evaluate_epoch(model, train_params, logfile, queries_meta, queries_it):
     queries_it = tuple(queries_it)
     with torch.no_grad():
         model['net'].eval()
-        stats     = make_track_stats(logfile, 'Eval', queries_meta, queries_it)
-        fwd       = util.memoize(ft.partial(forward, model['net'], model['transform']))
-        #^ Saves re-computation of forwarding as network is fixed during evaluation
-        iter_loss = make_iter_triplet_loss(train_params['margin'], fwd)
-        return ft.reduce(stats, iter_loss(queries_meta, queries_it), {'loss': 0, 'speed': 0})
+        n_im_tp  = n_im_triplets(queries_meta, queries_it)
+        fwd      = util.memoize(ft.partial(forward, model['net'], model['transform']))
+        im_tp_it = util.flatten(iter_im_triplets(queries_meta, queries_it))
+        loss_it  = it.starmap(ft.partial(triplet_loss, train_params['margin'], fwd), im_tp_it)
+        return ft.reduce(make_track_stats(logfile, 'Eval', queries_it, n_im_tp), loss_it, {'loss': 0, 'speed': 0})
 
 
 def iter_training(model, train_params, logfile, queries_meta, query_images):
@@ -167,7 +167,6 @@ def iter_test_pairs(queries_meta, queries_it):
 
 def eval(model, queries_meta, queries_it):
     fwd = util.memoize(ft.partial(forward, model['net'], model['transform']))
-    #^ Saves re-computation of forwarding as network is fixed during evaluation
     with torch.no_grad():
         model['net'].eval()
         is_positive    = lambda q, s: {'is_positive': s in queries_meta[q]['positive']}

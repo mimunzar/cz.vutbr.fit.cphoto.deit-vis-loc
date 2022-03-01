@@ -56,23 +56,19 @@ def parse_train_params(train_params):
     is_positive         = lambda n: 0 < n
     is_int              = lambda n: isinstance(n, int)
     is_positive_int     = lambda n: is_int(n) and is_positive(n)
-    wrong_params        = lambda c: c(cl.defaultdict(lambda: None, train_params))
     checker             = util.make_checker({
         'batch_size'        : util.make_validator('batch_size must be a positive int', is_positive_int),
         'deit_model'        : util.make_validator('deit_model must be a non-empty string', is_nonempty_or_null),
-        'resnet_model'      : util.make_validator('resnet_model must be a non-empty string', is_nonempty_or_null),
         'input_size'        : util.make_validator('input size (resolution) must be a positive int', is_positive_int),
         'max_epochs'        : util.make_validator('max_epochs must be a positive int', is_positive_int),
         'margin'            : util.make_validator('margin must be positive', is_positive),
+        'im_datapoints'     : util.make_validator('im_datapoints must be positive int', is_positive_int),
         'learning_rate'     : util.make_validator('learning_rate must be positive', is_positive),
         'stopping_patience' : util.make_validator('stopping_patience must be positive', is_positive),
         'yaw_tolerance_deg' : util.make_validator('yaw_tolerance_deg must be an int', is_int),
     })
-    if all(map(lambda s: s not in train_params, {'deit_model', 'resnet_model'})):
-        print('Invalid train params (missing "resnet_model" or "deit_model")', file=sys.stderr)
-        sys.exit(1)
-    if wrong_params(checker):
-        print('Invalid train params ({})'.format(', '.join(wrong_params(checker))), file=sys.stderr)
+    if checker(train_params):
+        print('Invalid train params ({})'.format(', '.join(checker(train_params))), file=sys.stderr)
         sys.exit(1)
     return train_params
 
