@@ -98,7 +98,7 @@ def training_process(train_params, queries_meta, pid, procinit):
     model        = {
         'net'       : net,
         'device'    : device,
-        'optimizer' : torch.optim.Adam(net.parameters(), train_params['learning_rate']),
+        'optimizer' : torch.optim.SGD(net.parameters(), train_params['learning_rate'], momentum=0.9),
         'transform' : make_im_transform(device, train_params['input_size']),
         'save_net'  : make_save_net(net, prefix, odir) if 0 == pid else lambda *_: None,
     }

@@ -6,7 +6,6 @@ import itertools   as it
 import random
 
 import torch
-import torch.distributed
 
 import src.deit_vis_loc.util as util
 
@@ -125,9 +124,7 @@ def iter_training(model, train_params, logfile, queries_meta, query_images):
         queries_it = random.sample(query_images['train'], k=input_len)
         #^ Shuffle dataset so generated batches are different every time
         tloss, tspeed = pluck(train_epoch   (model, train_params, logfile, queries_meta, queries_it))
-        torch.distributed.barrier()
         vloss, vspeed = pluck(evaluate_epoch(model, train_params, logfile, queries_meta, query_images['val']))
-        torch.distributed.barrier()
         return {'epoch': epoch, 'tloss': tloss, 'vloss': vloss, 'tspeed': tspeed, 'vspeed': vspeed}
     return map(train_and_evaluate_epoch, it.count(1))
 
