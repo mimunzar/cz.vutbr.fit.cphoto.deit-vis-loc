@@ -1,36 +1,37 @@
 #!/usr/bin/env python3
 
 import functools as ft
-
 import torch
 
 import src.deit_vis_loc.training as training
 
 
-def test_make_iter_im_triplets():
-    assert list(map(set, training.iter_im_triplets({}, []))) == []
+def test_iter_im_pairs():
+    assert list(map(set, training.iter_im_pairs({}, []))) == []
+    meta = {'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}}}
+    assert list(map(set, training.iter_im_pairs(meta, meta.keys()))) == [
+        {('foo', 'foo_p'), ('foo', 'foo_n')}]
     meta = {
-        'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}}
+       'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
+       'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
     }
+    assert list(map(set, training.iter_im_pairs(meta, meta.keys()))) == [
+        {('foo', 'foo_p'), ('foo', 'foo_n'), ('foo', 'bar_p'), ('foo', 'bar_n')},
+        {('bar', 'bar_p'), ('bar', 'bar_n'), ('bar', 'foo_p'), ('bar', 'foo_n')}]
+
+
+def test_iter_im_triplets():
+    assert list(map(set, training.iter_im_triplets({}, []))) == []
+    meta = {'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}}}
     assert list(map(set, training.iter_im_triplets(meta, meta.keys()))) == [
-            {('foo', 'foo_p', 'foo_n')},
-        ]
+        {('foo', 'foo_p', 'foo_n')}]
     meta = {
        'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
        'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
     }
     assert list(map(set, training.iter_im_triplets(meta, meta.keys()))) == [
-            {
-                ('foo', 'foo_p', 'foo_n'),
-                ('foo', 'foo_p', 'bar_p'),
-                ('foo', 'foo_p', 'bar_n'),
-            },
-            {
-                ('bar', 'bar_p', 'bar_n'),
-                ('bar', 'bar_p', 'foo_n'),
-                ('bar', 'bar_p', 'foo_p'),
-            },
-        ]
+        {('foo', 'foo_p', 'foo_n'), ('foo', 'foo_p', 'bar_p'), ('foo', 'foo_p', 'bar_n')},
+        {('bar', 'bar_p', 'bar_n'), ('bar', 'bar_p', 'foo_n'), ('bar', 'bar_p', 'foo_p')}]
 
 
 def test_iter_hard_im_triplets():
@@ -100,19 +101,4 @@ def test_early_stopping():
     assert it_learning({'vloss': 1}) == True
     assert it_learning({'vloss': 2}) == False
     #^ Patience over multiple losses
-
-
-def test_iter_test_pairs():
-    meta = {
-        'q_1': {'positive': {'p_1'}, 'negative': {'n_1'}},
-        'q_2': {'positive': {'p_2'}, 'negative': {'n_2'}},
-    }
-    assert list(training.iter_test_pairs(meta, [])) == []
-    assert list(training.iter_test_pairs(meta, ['q_1'])) == [
-        ('q_1', {('q_1', 'n_1'), ('q_1', 'p_1')})
-    ]
-    assert list(training.iter_test_pairs(meta, ['q_1', 'q_2'])) == [
-        ('q_1', {('q_1', 'n_1'), ('q_1', 'n_2'), ('q_1', 'p_1'), ('q_1', 'p_2')}),
-        ('q_2', {('q_2', 'n_1'), ('q_2', 'n_2'), ('q_2', 'p_1'), ('q_2', 'p_2')}),
-    ]
 

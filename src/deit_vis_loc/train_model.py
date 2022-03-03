@@ -14,9 +14,6 @@ import torch.hub
 import torch.multiprocessing.spawn
 import torch.nn.parallel
 import torch.optim
-import torchvision.transforms
-from PIL                 import Image
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import src.deit_vis_loc.data     as data
 import src.deit_vis_loc.training as training
@@ -75,19 +72,10 @@ def device_name(device):
     return 'CPU'
 
 
-def make_im_transform(device, input_size):
-    to_tensor = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(input_size, interpolation=3),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
-    ])
-    return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
-
-
 def make_save_net(net, fileprefix, output_dir):
     def save_net(epoch):
         epoch_str = str(epoch).zfill(3)
-        torch.save(net, os.path.join(output_dir, f'{fileprefix}-{epoch_str}.torch'))
+        torch.save(net.module, os.path.join(output_dir, f'{fileprefix}-{epoch_str}.torch'))
     return save_net
 
 
@@ -99,7 +87,6 @@ def training_process(train_params, meta, pid, procinit):
         'net'       : net,
         'device'    : device,
         'optimizer' : torch.optim.SGD(net.parameters(), train_params['learning_rate'], momentum=0.9),
-        'transform' : make_im_transform(device, train_params['input_size']),
         'save_net'  : make_save_net(net, prefix, odir) if 0 == pid else lambda *_: None,
     }
     images = {'train': util.nth(pid, procinit['train_parts_it']), 'val': procinit['val_im_it']}
@@ -111,7 +98,7 @@ def training_process(train_params, meta, pid, procinit):
         return result
 
 
-def params_to_name(epoch_secs, train_params):
+def params_to_fileprefix(epoch_secs, train_params):
     timestr         = datetime.fromtimestamp(epoch_secs).strftime('%Y%m%dT%H%M%S')
     net, batch_size = util.pluck(['deit_model', 'batch_size'], train_params)
     return f'{timestr}-{net}-{batch_size}'
@@ -130,7 +117,7 @@ if __name__ == "__main__":
     worker       = fp.partial(training_process, train_params, meta)
 
     train_im_it = set(util.take(args['dataset_size'], data.read_ims(args['dataset_dir'], 'train.txt')))
-    fileprefix  = params_to_name(util.epoch_secs(), train_params)
+    fileprefix  = params_to_fileprefix(util.epoch_secs(), train_params)
     procinit    = {
         'nprocs'    : args['workers'],
         'output_dir': args['output_dir'],

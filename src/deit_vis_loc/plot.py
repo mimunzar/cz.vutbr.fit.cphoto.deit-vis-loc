@@ -35,7 +35,7 @@ def n_closest_segments(n, result_it):
     im_grid  = figure.add_gridspec(nrows=len(im_rows), ncols=n + 1, hspace=0.05, wspace=0.05)
     axis     = lambda r, c: figure.add_subplot(im_grid[r, c])
     plt_grid = (zip(ims, (axis(r, c) for c in it.count())) for r, ims in enumerate(im_rows))
-    return [list(it.starmap(plot_img_on_axis, row)) for row in plt_grid]
+    return [tuple(it.starmap(plot_img_on_axis, row)) for row in plt_grid]
 
 
 def localization_percentile(segment_it):
@@ -46,7 +46,7 @@ def localization_percentile(segment_it):
 
 def running_localization_percentage(percentile_it):
     grouped    = it.groupby(sorted(percentile_it))
-    histogram  = cl.defaultdict(lambda: 0, {k: len(list(l)) for k, l in grouped})
+    histogram  = cl.defaultdict(lambda: 0, {k: len(tuple(l)) for k, l in grouped})
     total_size = sum(histogram.values())
     percentage = lambda n: round((n/total_size)*100, ndigits=2)
     return [percentage(histogram[i]) for i in range(1, 101)]
@@ -55,7 +55,7 @@ def running_localization_percentage(percentile_it):
 def rank_of_correct_location(result_it):
     percentiles   = (localization_percentile(r['segments']) for r in result_it)
     bounded_add   = lambda x, y: min(x + y, 100)
-    location_rank = list(it.accumulate(
+    location_rank = tuple(it.accumulate(
         running_localization_percentage(percentiles), bounded_add))
 
     _, ax = mpplt.subplots()

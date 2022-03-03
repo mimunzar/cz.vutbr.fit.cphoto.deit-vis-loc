@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import collections as cl
 import itertools   as it
 import json
 import math        as ma

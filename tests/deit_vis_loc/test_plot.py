@@ -3,8 +3,6 @@
 import src.deit_vis_loc.plot as plot
 import pytest
 
-import collections as cl
-
 
 def test_ims_of_query_with_n_segments():
     segments = [

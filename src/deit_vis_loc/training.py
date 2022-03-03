@@ -6,18 +6,28 @@ import itertools   as it
 import random
 
 import torch
+import torchvision.transforms
+from PIL                 import Image
+from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import src.deit_vis_loc.util as util
 
 
+def iter_im_pairs(meta, im_it):
+    im_segments = lambda im: util.flatten(meta[im].values())
+    segments    = set(util.flatten(map(im_segments, im_it)))
+    iter_pairs  = lambda im: it.product({im}, segments)
+    return map(iter_pairs, im_it)
+
+
 def iter_im_triplets(meta, im_it):
-    query_segments = lambda q: util.flatten(meta[q].values())
-    segments       = set(util.flatten(map(query_segments, im_it)))
-    def iter_im_triplets(query):
-        query_pos = meta[query]['positive']
-        query_neg = segments - query_pos
-        return it.product({query}, query_pos, query_neg)
-    return map(iter_im_triplets, im_it)
+    im_segments = lambda im: util.flatten(meta[im].values())
+    segments    = set(util.flatten(map(im_segments, im_it)))
+    def iter_triplets(im):
+        im_pos = meta[im]['positive']
+        im_neg = segments - im_pos
+        return it.product({im}, im_pos, im_neg)
+    return map(iter_triplets, im_it)
 
 
 def triplet_loss(margin, fn_fwd, anchor, pos, neg):
@@ -49,8 +59,8 @@ def backward(optimizer, loss):
     return loss
 
 
-def forward(net, fn_transform, fpath):
-    return net(fn_transform(fpath))
+def forward(net, fn_trans, im_fpath):
+    return net(fn_trans(im_fpath))
 
 
 def make_track_stats(logfile, stage, im_it, n_im_tp):
@@ -74,9 +84,9 @@ def make_track_stats(logfile, stage, im_it, n_im_tp):
     return track_stats
 
 
-def train_batch(model, train_params, logfile, meta, batches_total, batch_idx, im_it):
+def train_batch(model, train_params, fn_trans, logfile, meta, batches_total, batch_idx, im_it):
     bwd     = ft.partial(backward, model['optimizer'])
-    fwd     = ft.partial(forward, model['net'], util.memoize(model['transform']))
+    fwd     = ft.partial(forward, model['net'], util.memoize(fn_trans))
     loss_it = map(bwd, iter_triplet_loss(train_params, fwd, meta, im_it))
     stage   = f'Batch {util.format_fraction(batch_idx, batches_total)}'
     stats   = make_track_stats(logfile, stage, im_it, train_params['im_datapoints'])
@@ -92,11 +102,11 @@ def make_epoch_stats():
     return epoch_stats
 
 
-def train_epoch(model, train_params, logfile, meta, im_it):
+def train_epoch(model, train_params, fn_trans, logfile, meta, im_it):
     with torch.enable_grad():
         model['net'].train()
         batches       = tuple(util.partition(train_params['batch_size'], im_it))
-        batch_loss    = ft.partial(train_batch, model, train_params, logfile, meta, len(batches))
+        batch_loss    = ft.partial(train_batch, model, train_params, fn_trans, logfile, meta, len(batches))
         batch_loss_it = it.starmap(batch_loss, enumerate(batches, start=1))
         return ft.reduce(make_epoch_stats(), batch_loss_it, {'loss': 0, 'speed': 0})
 
@@ -106,25 +116,35 @@ def n_im_triplets(meta, im_it):
     return util.im_triplets(*map(len, util.prepend(im_it, p_n_it)))
 
 
-def evaluate_epoch(model, train_params, logfile, meta, im_it):
+def evaluate_epoch(model, train_params, fn_trans, logfile, meta, im_it):
     im_it = tuple(im_it)
     with torch.no_grad():
         model['net'].eval()
         n_im_tp  = n_im_triplets(meta, im_it)
-        fwd      = util.memoize(ft.partial(forward, model['net'], model['transform']))
+        fwd      = util.memoize(ft.partial(forward, model['net'], fn_trans))
         im_tp_it = util.flatten(iter_im_triplets(meta, im_it))
         loss_it  = it.starmap(ft.partial(triplet_loss, train_params['margin'], fwd), im_tp_it)
         return ft.reduce(make_track_stats(logfile, 'Eval', im_it, n_im_tp), loss_it, {'loss': 0, 'speed': 0})
 
 
+def make_im_transform(device, input_size):
+    to_tensor = torchvision.transforms.Compose([
+        torchvision.transforms.Resize(input_size, interpolation=3),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
+    ])
+    return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
+
+
 def iter_training(model, train_params, logfile, meta, images):
     input_len = len(images['train'])
     pluck     = ft.partial(util.pluck, ['loss', 'speed'])
+    transform = make_im_transform(model['device'], train_params['input_size'])
     def train_and_evaluate_epoch(epoch):
         im_it = random.sample(images['train'], k=input_len)
         #^ Shuffle dataset so generated batches are different every time
-        tloss, tspeed = pluck(train_epoch   (model, train_params, logfile, meta, im_it))
-        vloss, vspeed = pluck(evaluate_epoch(model, train_params, logfile, meta, images['val']))
+        tloss, tspeed = pluck(train_epoch   (model, train_params, transform, logfile, meta, im_it))
+        vloss, vspeed = pluck(evaluate_epoch(model, train_params, transform, logfile, meta, images['val']))
         return {'epoch': epoch, 'tloss': tloss, 'vloss': vloss, 'tspeed': tspeed, 'vspeed': vspeed}
     return map(train_and_evaluate_epoch, it.count(1))
 
@@ -155,20 +175,21 @@ def train(model, train_params, logfile, meta, images):
     return min(map(lambda d: train_stats(model, logfile, **d), learning_it), key=ft.partial(util.pluck, ['vloss']))
 
 
-def iter_test_pairs(meta, im_it):
-    query_segments = lambda q: util.flatten(meta[q].values())
-    segments       = set(util.flatten(map(query_segments, im_it)))
-    product        = it.product(im_it, segments)
-    return ((q, set(p)) for q, p in it.groupby(product, util.first))
+def im_stats(fn_fwd, meta, im, im_pairs_it):
+    def pair_stats(acc, pair):
+        im, seg  = pair
+        distance = float(torch.cdist(fn_fwd(im), fn_fwd(seg)))
+        positive = seg in meta[im]['positive']
+        return {**acc, **{seg: {'is_pos': positive, 'dist': distance}}}
+    return (im, ft.reduce(pair_stats, im_pairs_it, {}))
 
 
-def eval(model, meta, im_it):
-    fwd = util.memoize(ft.partial(forward, model['net'], model['transform']))
+def iter_im_stats(model, train_params, meta, im_it):
+    im_it = tuple(im_it)
+    trans = make_im_transform(model['device'], train_params['input_size'])
+    fwd   = util.memoize(ft.partial(forward, model['net'], trans))
     with torch.no_grad():
         model['net'].eval()
-        is_positive    = lambda q, s: {'is_positive': s in meta[q]['positive']}
-        distance       = lambda l, r: {'distance': torch.cdist(fwd(l), fwd(r))}
-        build_segment  = lambda q, s: {'name': s, **distance(q, s), **is_positive(q, s)}
-        test_pairs     = iter_test_pairs(meta, im_it)
-        return ({'query': q, 'segments': it.starmap(build_segment, p)} for q, p in test_pairs)
+        im_pairs_it = zip(im_it, iter_im_pairs(meta, im_it))
+        yield from it.starmap(ft.partial(im_stats, fwd, meta), im_pairs_it)
 
