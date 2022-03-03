@@ -34,15 +34,15 @@ def test_make_iter_im_triplets():
 
 
 def test_iter_hard_im_triplets():
-    loss       = lambda s: int(s.endswith('_p')) + 2*int(s.startswith('foo'))
-    tp_loss    = lambda a, p, n: loss(a) + loss(p) + loss(n)
-    meta       = {
+    loss    = lambda s: int(s.endswith('_p')) + 2*int(s.startswith('foo'))
+    tp_loss = lambda a, p, n: loss(a) + loss(p) + loss(n)
+    meta    = {
        'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
        'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
     }
     iter_hard  = lambda n, meta: training.iter_hard_im_triplets(n, tp_loss, meta, meta.keys())
 
-    assert list(map(list, iter_hard(3, {}  ))) == []
+    assert list(map(list, iter_hard(3,   {}))) == []
     assert list(map(list, iter_hard(0, meta))) == [
             [],
             [],
@@ -103,15 +103,15 @@ def test_early_stopping():
 
 
 def test_iter_test_pairs():
-    queries_meta = {
+    meta = {
         'q_1': {'positive': {'p_1'}, 'negative': {'n_1'}},
         'q_2': {'positive': {'p_2'}, 'negative': {'n_2'}},
     }
-    assert list(training.iter_test_pairs(queries_meta, [])) == []
-    assert list(training.iter_test_pairs(queries_meta, ['q_1'])) == [
+    assert list(training.iter_test_pairs(meta, [])) == []
+    assert list(training.iter_test_pairs(meta, ['q_1'])) == [
         ('q_1', {('q_1', 'n_1'), ('q_1', 'p_1')})
     ]
-    assert list(training.iter_test_pairs(queries_meta, ['q_1', 'q_2'])) == [
+    assert list(training.iter_test_pairs(meta, ['q_1', 'q_2'])) == [
         ('q_1', {('q_1', 'n_1'), ('q_1', 'n_2'), ('q_1', 'p_1'), ('q_1', 'p_2')}),
         ('q_2', {('q_2', 'n_1'), ('q_2', 'n_2'), ('q_2', 'p_1'), ('q_2', 'p_2')}),
     ]

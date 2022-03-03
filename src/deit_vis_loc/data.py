@@ -39,13 +39,13 @@ def parse_queries_metadata(segments_meta, dataset_dpath, yaw_tolerance_rad):
     return {to_query_path(k): map_segment_path(v) for k, v in pos_neg_segments}
 
 
-def read_queries_metadata(queries_meta_fpath, dataset_dpath, yaw_tolerance_deg):
+def read_metafile(queries_meta_fpath, dataset_dpath, yaw_tolerance_deg):
     tolerance_rad = ma.radians(yaw_tolerance_deg)
     with open(queries_meta_fpath) as f:
         return parse_queries_metadata(json.load(f), dataset_dpath, tolerance_rad)
 
 
-def read_query_imgs(dataset_dpath, name):
+def read_ims(dataset_dpath, name):
     queries_dpath = os.path.join(dataset_dpath, 'query_original_result')
     dataset_fpath = os.path.join(queries_dpath, name)
     return (os.path.join(queries_dpath, l.strip()) for l in open(dataset_fpath))

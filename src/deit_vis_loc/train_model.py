@@ -25,7 +25,7 @@ import src.deit_vis_loc.util     as util
 
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--metafile',     help='The path to file containing metadata for queries',
+    parser.add_argument('--metafile',     help='The path to file containing image metadata',
             required=True, metavar='FILE')
     parser.add_argument('--dataset-dir',  help='The path to dataset of rendered segments',
             required=True, metavar='DIR')
@@ -91,7 +91,7 @@ def make_save_net(net, fileprefix, output_dir):
     return save_net
 
 
-def training_process(train_params, queries_meta, pid, procinit):
+def training_process(train_params, meta, pid, procinit):
     init_process(pid, procinit['nprocs'], procinit['device'])
     net, device  = allocate_network_for_process(procinit['net'], pid, procinit['device'])
     prefix, odir = util.pluck(['fileprefix', 'output_dir'], procinit)
@@ -102,11 +102,11 @@ def training_process(train_params, queries_meta, pid, procinit):
         'transform' : make_im_transform(device, train_params['input_size']),
         'save_net'  : make_save_net(net, prefix, odir) if 0 == pid else lambda *_: None,
     }
-    query_images = {'train': util.nth(pid, procinit['train_parts_it']), 'val': procinit['vqueries_it']}
+    images = {'train': util.nth(pid, procinit['train_parts_it']), 'val': procinit['val_im_it']}
 
     with open(os.path.join(odir, f'{prefix}-{pid}.log'), 'w') as logfile:
         util.log(f'Started training on "{device_name(device)}"\n\n', file=logfile)
-        result = training.train(model, train_params, logfile, queries_meta, query_images)
+        result = training.train(model, train_params, logfile, meta, images)
         util.log(f'Training ended with the best net in epoch {result["epoch"]}', start='\n', file=logfile)
         return result
 
@@ -126,21 +126,20 @@ if __name__ == "__main__":
         assert args['workers'] <= torch.cuda.device_count(), 'Not enough GPUs'
 
     train_params = data.read_train_params(args['train_params'])
-    queries_meta = data.read_queries_metadata(args['metafile'], args['dataset_dir'], train_params['yaw_tolerance_deg'])
-    worker       = fp.partial(training_process, train_params, queries_meta)
+    meta         = data.read_metafile(args['metafile'], args['dataset_dir'], train_params['yaw_tolerance_deg'])
+    worker       = fp.partial(training_process, train_params, meta)
 
-    iter_queries = lambda f: data.read_query_imgs(args['dataset_dir'], f)
-    tqueries_it  = set(util.take(args['dataset_size'], iter_queries('train.txt')))
-    fileprefix   = params_to_name(util.epoch_secs(), train_params)
-    procinit     = {
+    train_im_it = set(util.take(args['dataset_size'], data.read_ims(args['dataset_dir'], 'train.txt')))
+    fileprefix  = params_to_name(util.epoch_secs(), train_params)
+    procinit    = {
         'nprocs'    : args['workers'],
         'output_dir': args['output_dir'],
         'fileprefix': fileprefix,
 
         'net'            : torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True),
         'device'         : args['device'],
-        'vqueries_it'    : set(util.take(args['dataset_size'], iter_queries('val.txt'))),
-        'train_parts_it' : tuple(util.partition(len(tqueries_it)//args['workers'], tqueries_it))
+        'val_im_it'      : set(util.take(args['dataset_size'], data.read_ims(args['dataset_dir'],'val.txt'))),
+        'train_parts_it' : tuple(util.partition(len(train_im_it)//args['workers'], train_im_it))
     }
 
     os.makedirs(args['output_dir'], exist_ok=True)
