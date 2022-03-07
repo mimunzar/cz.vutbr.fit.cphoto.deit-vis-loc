@@ -12,9 +12,9 @@ import src.deit_vis_loc.training as training
 import src.deit_vis_loc.util     as util
 
 
-def parse_args(list_of_args):
+def parse_args(args_it):
     parser = argparse.ArgumentParser(
-            description='Allows to test trained models on visual localization.')
+            description='Allows to test trained models and save the results')
     parser.add_argument('--metafile',     help='The path to file containing image metadata',
             required=True, metavar='FILE')
     parser.add_argument('--dataset-dir',  help='The path to dataset of rendered segments',
@@ -23,11 +23,11 @@ def parse_args(list_of_args):
             required=False, type=int, default=None, metavar='NUM')
     parser.add_argument('--output-dir',   help='The path to directory where results are saved',
             required=True, metavar='DIR')
-    parser.add_argument('-m', '--model',  help='The path to saved model to evaluate',
+    parser.add_argument('--model',        help='The path to saved model to evaluate',
             required=True, metavar='FILE')
     parser.add_argument('--device',       help='The device to use',
             required=False, choices=['cpu', 'cuda'], default='cuda')
-    return vars(parser.parse_args(list_of_args))
+    return vars(parser.parse_args(args_it))
 
 
 def modelpath_to_fileprefix(model_fpath):

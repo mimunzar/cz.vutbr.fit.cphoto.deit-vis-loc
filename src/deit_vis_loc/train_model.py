@@ -133,7 +133,7 @@ if __name__ == "__main__":
     with open(os.path.join(args['output_dir'], f'{fileprefix}.json'), 'w') as f:
         json.dump(train_params, f, indent=4)
 
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "29501"
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '29501'
     torch.multiprocessing.spawn(worker, nprocs=procinit['nprocs'], args=(procinit,))
 
