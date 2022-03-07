@@ -175,21 +175,19 @@ def train(model, train_params, logfile, meta, images):
     return min(map(lambda d: train_stats(model, logfile, **d), learning_it), key=ft.partial(util.pluck, ['vloss']))
 
 
-def im_stats(fn_fwd, meta, im, im_pairs_it):
-    def pair_stats(acc, pair):
-        im, seg  = pair
+def im_score(fn_fwd, meta, im, im_pairs_it):
+    def pair_score(im, seg):
         distance = float(torch.cdist(fn_fwd(im), fn_fwd(seg)))
         positive = seg in meta[im]['positive']
-        return {**acc, **{seg: {'is_pos': positive, 'dist': distance}}}
-    return (im, ft.reduce(pair_stats, im_pairs_it, {}))
+        return {'segment': seg ,'is_pos': positive, 'dist': distance}
+    return (im, sorted(it.starmap(pair_score, im_pairs_it), key=ft.partial(util.pluck, ['dist'])))
 
 
-def iter_im_stats(model, train_params, meta, im_it):
+def test(model, train_params, meta, im_it):
     im_it = tuple(im_it)
-    trans = make_im_transform(model['device'], train_params['input_size'])
-    fwd   = util.memoize(ft.partial(forward, model['net'], trans))
     with torch.no_grad():
         model['net'].eval()
-        im_pairs_it = zip(im_it, iter_im_pairs(meta, im_it))
-        yield from it.starmap(ft.partial(im_stats, fwd, meta), im_pairs_it)
+        transform = make_im_transform(model['device'], train_params['input_size'])
+        fwd       = util.memoize(ft.partial(forward, model['net'], transform))
+        yield from it.starmap(ft.partial(im_score, fwd, meta), zip(im_it, iter_im_pairs(meta, im_it)))
 

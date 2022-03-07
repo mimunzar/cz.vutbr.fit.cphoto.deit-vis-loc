@@ -30,8 +30,8 @@ def parse_args(list_of_args):
     return vars(parser.parse_args(list_of_args))
 
 
-def modelpath_to_fileprefix(fpath):
-    return os.path.basename('-'.join(fpath.split('-')[:-1]))
+def modelpath_to_fileprefix(model_fpath):
+    return os.path.basename('-'.join(model_fpath.split('-')[:-1]))
 
 
 if __name__ == "__main__":
@@ -40,13 +40,10 @@ if __name__ == "__main__":
     train_params = data.read_train_params(os.path.join(os.path.dirname(args['model']), f'{fileprefix}.json'))
     meta         = data.read_metafile(args['metafile'], args['dataset_dir'], train_params['yaw_tolerance_deg'])
     test_im_it   = set(util.take(args['dataset_size'], data.read_ims(args['dataset_dir'], 'test.txt')))
+    model        = {'device': args['device'], 'net': torch.load(args['model'], map_location=args['device'])}
 
-    model  = {
-        'device' : args['device'],
-        'net'    : torch.load(args['model'], map_location=args['device']),
-    }
     with open(os.path.join(args['output_dir'], f'{fileprefix}.bin'), 'wb') as f:
         pickle.dump(len(test_im_it), f)
-        for im_stats in training.iter_im_stats(model, train_params, meta, test_im_it):
-            pickle.dump(im_stats, f)
+        for im_score in training.test(model, train_params, meta, test_im_it):
+            pickle.dump(im_score, f)
 
