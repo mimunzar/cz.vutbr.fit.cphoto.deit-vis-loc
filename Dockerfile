@@ -1,15 +1,15 @@
-FROM centos:7
+FROM conda/miniconda3
 
-RUN yum -y update \
-    && yum -y install curl bzip2
+WORKDIR /app
+COPY ./environment.yml ./
+#^ Build environment first so changes to the source don't trigger reinstallation
 
-WORKDIR app/
+RUN conda update -n base -c defaults conda \
+    && conda env create -f environment.yml \
+    && conda clean -ay \
+    && conda init bash \
+    && echo "conda activate $(head -n1 < environment.yml | cut -d' ' -f2)" >> ~/.bashrc
 
-COPY scripts/install_conda_env.sh scripts/
-COPY environment.yml .
-RUN /bin/bash scripts/install_conda_env.sh miniconda/ environment.yml
-
-COPY scripts/exec_in_conda_env.sh scripts/
-COPY src/ src/
-ENTRYPOINT ["/bin/bash", "scripts/exec_in_conda_env.sh", "miniconda/", "environment.yml"]
+COPY ./src/ ./src/
+ENTRYPOINT ["/usr/bin/env", "bash", "-lc"]
 
