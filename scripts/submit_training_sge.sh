@@ -2,22 +2,37 @@
 #
 #$ -S /bin/bash
 #$ -N deit_vis_loc
+#$ -pe smp 2
+#$ -l gpu=2,gpu_ram=8G
 #$ -l ram_free=16G,mem_free=16G
-#$ -l gpu=1,gpu_ram=8G
-#$ -l matylda1=3
+#$ -l matylda1=2
 #$ -q long.q@@gpu
+#$ -R y
+#$ -j y
+
+PROJECT_ROOT=/mnt/matylda1/Locate/cz.vutbr.fit.cphoto.deit-vis-loc
 
 
-PROJECT_ROOT="/mnt/matylda1/Locate/cz.vutbr.fit.cphoto.deit-vis-loc"
-cd ${PROJECT_ROOT} || exit 1
+activate_env() {
+    unset PYTHONHOME
+    source miniconda/etc/profile.d/conda.sh
+    conda activate $(head -n1 environment.yml | cut -d' ' -f2)
+}
 
-ulimit -t $((14*86400))
-mkdir -p output/
-/bin/bash scripts/exec_in_conda_env.sh miniconda/ environment.yml \
+train_network() {
+    ulimit -t $((14*86400))
+    mkdir -p output/
     python -um src.deit_vis_loc.train_model \
         --dataset-dir  input/ \
         --metafile     input/queries_meta.json \
         --train-params input/train_params.json \
         --output-dir   output/ \
-        --sge          &> output/"$(date +'%Y%m%dT%H%M%S').log"
+        --workers      ${NSLOTS} \
+        --device       cuda \
+        --sge
+}
+
+cd ${PROJECT_ROOT} || exit 1
+activate_env
+train_network
 
