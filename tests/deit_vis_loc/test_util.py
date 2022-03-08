@@ -104,10 +104,14 @@ def test_print_progress():
 
 def test_format_progress():
     f = util.make_progress_formatter(bar_width=1, total=1)
-    assert f(stage='Foo',    curr=0, speed=0)      == '            Foo: [ ] 0/1  (0.00 im/s)'
-    assert f(stage='Foo',    curr=1, speed=0.5)    == '            Foo: [#] 1/1  (0.50 im/s)'
-    assert f(stage='FooFoo', curr=1, speed=0.5)    == '         FooFoo: [#] 1/1  (0.50 im/s)'
-    assert f(stage='Foo',    curr=1, speed=1000.5) == '            Foo: [#] 1/1  (1000.50 im/s)'
+    assert f(stage='Foo', curr=0, speed=0, loss=0) == \
+            '            Foo: [ ] 0/1  (0.00 loss, 0.00 im/s)'
+    assert f(stage='Foo', curr=1, speed=0.5, loss=0.5) == \
+            '            Foo: [#] 1/1  (0.50 loss, 0.50 im/s)'
+    assert f(stage='FooFoo', curr=1, speed=0.5, loss=0.5) == \
+            '         FooFoo: [#] 1/1  (0.50 loss, 0.50 im/s)'
+    assert f(stage='Foo',    curr=1, speed=1000.5, loss=1000.5) == \
+            '            Foo: [#] 1/1  (1000.50 loss, 1000.50 im/s)'
 
 
 def test_format_fraction():

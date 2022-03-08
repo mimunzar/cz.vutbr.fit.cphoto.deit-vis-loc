@@ -85,8 +85,8 @@ def progress_bar(bar_width, total, curr):
 
 def make_progress_formatter(bar_width, total):
     prog_bar = ft.partial(progress_bar, bar_width, total)
-    def progress_formatter(stage, curr, speed):
-        return f'{stage:>15}: {prog_bar(curr)}  ({speed:.02f} im/s)'
+    def progress_formatter(stage, curr, speed, loss):
+        return f'{stage:>15}: {prog_bar(curr)}  ({loss:.2f} loss, {speed:.02f} im/s)'
     return progress_formatter
 
 
