@@ -6,8 +6,9 @@ import itertools   as it
 import random
 
 import torch
-import torchvision.transforms
-from PIL                 import Image
+import torch.nn.functional    as F
+import torchvision.transforms as T
+from PIL import Image
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import src.deit_vis_loc.util as util
@@ -31,12 +32,11 @@ def iter_im_triplets(meta, im_it):
 
 
 def triplet_loss(margin, fn_fwd, anchor, pos, neg):
-    a_embed = fn_fwd(anchor)
-    a_p_dis = torch.cdist(a_embed, fn_fwd(pos))
-    a_n_dis = torch.cdist(a_embed, fn_fwd(neg))
-    result  = a_p_dis - a_n_dis + margin
-    result[0 > result] = 0
-    return result
+    a_embed  = fn_fwd(anchor)
+    a_p_dis  = 1 - F.cosine_similarity(a_embed, fn_fwd(pos))
+    a_n_dis  = 1 - F.cosine_similarity(a_embed, fn_fwd(neg))
+    distance = a_p_dis - a_n_dis + margin
+    return torch.clamp(distance, min=0)
 
 
 def iter_hard_im_triplets(n_im_tp, fn_tp_loss, meta, im_it):
@@ -128,10 +128,10 @@ def evaluate_epoch(model, train_params, fn_trans, logfile, meta, im_it):
 
 
 def make_im_transform(device, input_size):
-    to_tensor = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(input_size, interpolation=3),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
+    to_tensor = T.Compose([
+        T.Resize(input_size, interpolation=3),
+        T.ToTensor(),
+        T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
     ])
     return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
 

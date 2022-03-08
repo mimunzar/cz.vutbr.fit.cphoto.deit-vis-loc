@@ -65,21 +65,20 @@ def test_iter_hard_im_triplets():
 
 
 def test_triplet_loss():
-    z = torch.zeros(1, 1)
-    o = torch.ones (1, 1)
-    loss = ft.partial(training.triplet_loss, 0, lambda x: x)
-    assert loss(z, z, z) == torch.tensor([[0.]])
-    assert loss(z, z, o) == torch.tensor([[0.]])
-    assert loss(z, o, z) == torch.tensor([[1.]])
-    assert loss(z, o, o) == torch.tensor([[0.]])
-    assert loss(o, o, o) == torch.tensor([[0.]])
+    p = torch.tensor([[0., 2.]])
+    n = torch.tensor([[2., 0.]])
+    l = ft.partial(training.triplet_loss, 0., lambda x: x)
+    assert l(p, p, p) == torch.tensor([0.])
+    assert l(p, p, n) == torch.tensor([0.])
+    assert l(p, n, p) == torch.tensor([1.])
+    assert l(p, n, n) == torch.tensor([0.])
+    assert l(n, n, n) == torch.tensor([0.])
 
-    loss = ft.partial(training.triplet_loss, 0.5, lambda x: x)
-    assert loss(z, z, z) == torch.tensor([[0.5]])
-    assert loss(z, z, o) == torch.tensor([[0.]])
-    assert loss(z, o, z) == torch.tensor([[1.5]])
-    assert loss(z, o, o) == torch.tensor([[0.5]])
-    assert loss(o, o, o) == torch.tensor([[0.5]])
+    l = ft.partial(training.triplet_loss, .5, lambda x: x)
+    assert l(p, p, p) == torch.tensor([.5])
+    assert l(p, p, n) == torch.tensor([0.])
+    assert l(p, n, n) == torch.tensor([.5])
+    assert l(n, n, n) == torch.tensor([.5])
 
 
 def test_early_stopping():
