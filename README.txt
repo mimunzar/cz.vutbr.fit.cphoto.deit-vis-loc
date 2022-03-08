@@ -15,7 +15,7 @@ Installation
 To install the tool navigate to the project's folder  and  issue  the  following
 command:
 
-    conda env create environment.yml
+    conda env create -f environment.yml
 
 
 Usage for Model Training [TODO]

@@ -3,7 +3,7 @@
 #$ -S /bin/bash
 #$ -N deit_vis_loc
 #$ -pe smp 2
-#$ -l gpu=2,gpu_ram=8G
+#$ -l gpu=1,gpu_ram=8G
 #$ -l ram_free=16G,mem_free=16G
 #$ -l matylda1=2
 #$ -q long.q@@gpu
@@ -11,7 +11,6 @@
 #$ -j y
 
 PROJECT_ROOT=/mnt/matylda1/Locate/cz.vutbr.fit.cphoto.deit-vis-loc
-
 
 activate_env() {
     unset PYTHONHOME
@@ -29,7 +28,7 @@ train_network() {
         --output-dir   output/ \
         --workers      ${NSLOTS} \
         --device       cuda \
-        --sge
+        --sge &> output/"$(date +'%Y%m%dT%H%M%S').log"
 }
 
 cd ${PROJECT_ROOT} || exit 1
