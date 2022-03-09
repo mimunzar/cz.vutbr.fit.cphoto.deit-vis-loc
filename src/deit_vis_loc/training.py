@@ -35,8 +35,8 @@ def triplet_loss(margin, fn_fwd, anchor, pos, neg):
     a_embed  = fn_fwd(anchor)
     a_p_dis  = 1 - F.cosine_similarity(a_embed, fn_fwd(pos))
     a_n_dis  = 1 - F.cosine_similarity(a_embed, fn_fwd(neg))
-    distance = a_p_dis - a_n_dis + margin
-    return torch.clamp(distance, min=0)
+    distance = torch.clamp(a_p_dis - a_n_dis + margin, min=0)
+    return distance
 
 
 def iter_hard_im_triplets(n_im_tp, fn_tp_loss, meta, im_it):

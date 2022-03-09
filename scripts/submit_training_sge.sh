@@ -8,7 +8,6 @@
 #$ -l matylda1=2
 #$ -q long.q@@gpu
 #$ -R y
-#$ -j y
 
 PROJECT_ROOT=/mnt/matylda1/Locate/cz.vutbr.fit.cphoto.deit-vis-loc
 
