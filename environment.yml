@@ -10,5 +10,4 @@ dependencies:
   - torchvision==0.8.2
   - pip:
     - timm==0.3.2
-    - safe-gpu==1.3
 

@@ -5,6 +5,7 @@ import functools as fp
 import json
 import os
 import sys
+import subprocess
 from datetime import datetime
 
 import torch
@@ -43,20 +44,20 @@ def parse_args(args_it):
 
 def allocate_network_for_process_on_gpu(net, pid):
     device = f'cuda:{pid}'
-    torch.cuda.set_device(pid)
-    net.cuda(device)
-    net  = torch.nn.parallel.DistributedDataParallel(net, device_ids=[pid])
-    return (net, device)
+    with torch.cuda.device(device):
+        net.cuda(device)
+        net = torch.nn.parallel.DistributedDataParallel(net, device_ids=[pid])
+        return (net, device)
 
 
 def allocate_network_for_process_on_cpu(net):
     device = 'cpu'
-    net  = torch.nn.parallel.DistributedDataParallel(net, device_ids=None)
+    net    = torch.nn.parallel.DistributedDataParallel(net, device_ids=None)
     return (net, device)
 
 
 def allocate_network_for_process(net, pid, device):
-    if device.startswith('cuda'):
+    if 'cuda' == device:
         return allocate_network_for_process_on_gpu(net, pid)
     return allocate_network_for_process_on_cpu(net)
 
@@ -67,9 +68,7 @@ def init_process(pid, nprocs, device):
 
 
 def device_name(device):
-    if device.startswith('cuda'):
-        return torch.cuda.get_device_name(device)
-    return 'CPU'
+    return torch.cuda.get_device_name(device) if 'cuda' == device else 'CPU'
 
 
 def make_save_net(net, fileprefix, output_dir):
@@ -104,12 +103,17 @@ def params_to_fileprefix(epoch_secs, train_params):
     return f'{timestr}-{net}-{batch_size}'
 
 
+def shell_cmd(args_it):
+    return subprocess.check_output(args_it, encoding='utf-8')
+
+
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
-    if args['sge']:
-        from safe_gpu import safe_gpu
-        gpu_owner = safe_gpu.GPUOwner(nb_gpus=args['workers'])
-    if args['device'].startswith('cuda'):
+    if args['sge'] and 'cuda' == args['device']:
+        devices      = set(shell_cmd(['nvidia-smi', '--query-gpu=gpu_uuid', '--format=noheader,csv']).split('\n'))
+        busy_devices = set(shell_cmd(['nvidia-smi', '--query-compute-apps=gpu_uuid', '--format=noheader,csv']).split('\n'))
+        os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(devices - busy_devices)
+    if 'cuda' == args['device']:
         assert args['workers'] <= torch.cuda.device_count(), 'Not enough GPUs'
 
     train_params = data.read_train_params(args['train_params'])
