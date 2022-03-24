@@ -11,7 +11,7 @@ import torchvision.transforms as T
 from PIL import Image
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-import src.deit_vis_loc.util as util
+import src.deit_vis_loc.libs.util as util
 
 
 def iter_im_pairs(meta, im_it):

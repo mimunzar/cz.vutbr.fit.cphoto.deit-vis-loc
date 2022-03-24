@@ -4,7 +4,7 @@ from math import pi
 
 import pytest
 
-import src.deit_vis_loc.util as util
+import src.deit_vis_loc.libs.util as util
 
 
 
@@ -118,15 +118,6 @@ def test_format_fraction():
     assert util.format_fraction(1, 1)   == '1/1'
     assert util.format_fraction(1, 10)  == ' 1/10'
     assert util.format_fraction(1, 100) == '  1/100'
-
-
-def test_circle_difference_rad():
-    assert util.circle_difference_rad(2*pi, 2*pi) == 0
-    assert util.circle_difference_rad(0,    2*pi) == 0
-    assert util.circle_difference_rad(pi, 2*pi) == pi
-    assert util.circle_difference_rad(2*pi, pi) == pi
-    assert util.circle_difference_rad(0, 2*pi - pi/2) == pi/2
-    assert util.circle_difference_rad(0,        pi/2) == pi/2
 
 
 def test_make_running_avg():

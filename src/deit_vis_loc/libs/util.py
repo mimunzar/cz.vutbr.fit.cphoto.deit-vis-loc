@@ -121,12 +121,6 @@ def make_avg_ims_sec():
     return lambda n: running_avg(ims_sec(n))
 
 
-def circle_difference_rad(l_rad, r_rad):
-    distance = abs(l_rad - r_rad) % (2*ma.pi)
-    return 2*ma.pi - distance if distance > ma.pi else distance
-    #^ If distance is longer than half circle, there is a shorter way
-
-
 def im_triplets(n_ims, n_pos, n_neg):
     card_pos = n_pos
     card_neg = (n_ims - 1)*(n_pos + n_neg) + n_neg

@@ -8,7 +8,7 @@ import itertools   as it
 import functools   as ft
 import math        as ma
 
-import src.deit_vis_loc.util as util
+import src.deit_vis_loc.libs.util as util
 
 
 def plot_im_on_axis(im, axis):

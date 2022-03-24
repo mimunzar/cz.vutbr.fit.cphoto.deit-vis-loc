@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 
-import itertools   as it
+import itertools as it
 import json
-import math        as ma
+import math as ma
 import os
 import sys
 
-import src.deit_vis_loc.util as util
+import src.deit_vis_loc.libs.spherical as spherical
+import src.deit_vis_loc.libs.util as util
 
 
 def is_circle_diff_close(tolerance_rad, l_rad, r_rad):
-    circle_diff_rad = util.circle_difference_rad(l_rad, r_rad)
-    return circle_diff_rad <= tolerance_rad + 1e-4
+    diff = spherical.circle_diff_rad(l_rad, r_rad)
+    return diff <= tolerance_rad + 1e-4
     #^ Circle difference has to be lower than tolerance + precision
 
 
