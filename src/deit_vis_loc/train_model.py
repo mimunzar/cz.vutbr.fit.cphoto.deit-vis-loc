@@ -117,16 +117,15 @@ if __name__ == "__main__":
         assert args['workers'] <= torch.cuda.device_count(), 'Not enough GPUs'
 
     train_params = data.read_train_params(args['train_params'])
-    meta         = data.read_metafile(args['metafile'], args['dataset_dir'], train_params['yaw_tolerance_deg'])
+    meta         = data.read_metafile(args['metafile'])
     worker       = fp.partial(training_process, train_params, meta)
 
     train_im_it = set(util.take(args['dataset_size'], data.read_ims(args['dataset_dir'], 'train.txt')))
     fileprefix  = params_to_fileprefix(util.epoch_secs(), train_params)
     procinit    = {
-        'nprocs'    : args['workers'],
-        'output_dir': args['output_dir'],
-        'fileprefix': fileprefix,
-
+        'nprocs'         : args['workers'],
+        'output_dir'     : args['output_dir'],
+        'fileprefix'     : fileprefix,
         'net'            : torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True),
         'device'         : args['device'],
         'val_im_it'      : set(util.take(args['dataset_size'], data.read_ims(args['dataset_dir'],'val.txt'))),

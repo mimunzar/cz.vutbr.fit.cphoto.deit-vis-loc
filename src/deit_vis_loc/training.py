@@ -1,61 +1,85 @@
 #!/usr/bin/env python3
 
 import collections as cl
-import functools   as ft
-import itertools   as it
+import functools as ft
+import itertools as it
+import math as ma
 import random
 
 import torch
-import torch.nn.functional    as F
+import torch.nn.functional as F
 import torchvision.transforms as T
 from PIL import Image
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import src.deit_vis_loc.libs.util as util
+import src.deit_vis_loc.libs.spherical as spherical
 
 
-def iter_im_pairs(meta, im_it):
-    im_segments = lambda im: util.flatten(meta[im].values())
-    segments    = set(util.flatten(map(im_segments, im_it)))
-    iter_pairs  = lambda im: it.product({im}, segments)
-    return map(iter_pairs, im_it)
+
+def is_dist_close(fn_dist_m, limit_m, tol_m, im, render):
+    pluck = ft.partial(util.pluck, ['latitude', 'longitude'])
+    return fn_dist_m(pluck(im), pluck(render)) - limit_m <= tol_m
 
 
-def iter_im_triplets(meta, im_it):
-    im_segments = lambda im: util.flatten(meta[im].values())
-    segments    = set(util.flatten(map(im_segments, im_it)))
+def is_yaw_close(fn_circle_dist_rad, limit_rad, tol_rad, im, render):
+    pluck = ft.partial(util.pluck, ['yaw'])
+    return fn_circle_dist_rad(pluck(im), pluck(render)) - limit_rad <= tol_rad
+
+
+def iter_pos_renders(params, im, renders_it):
+    d, d_tol  = util.pluck(['dist_m', 'dist_tolerance_m'], params)
+    y, y_tol  = map(ma.radians, util.pluck(['yaw_deg','yaw_tolerance_deg'], params))
+    is_d_near = ft.partial(is_dist_close, spherical.dist_m, d, d_tol, im)
+    is_y_near = ft.partial(is_yaw_close, spherical.circle_dist_rad, y, y_tol, im)
+    return filter(is_d_near, filter(is_y_near, renders_it))
+
+
+def iter_neg_renders(params, im, renders_it):
+    d, d_tol  = util.pluck(['dist_m', 'dist_tolerance_m'], params)
+    is_d_near = ft.partial(is_dist_close, spherical.dist_m, d, d_tol, im)
+    return filter(util.complement(is_d_near), renders_it)
+
+
+def iter_triplets(fn_iter_pos, fn_iter_neg, im_it, renders_it):
+    renders_it = tuple(renders_it)
     def iter_triplets(im):
-        im_pos = meta[im]['positive']
-        im_neg = segments - im_pos
-        return it.product({im}, im_pos, im_neg)
+        im_pos = fn_iter_pos(im, renders_it)
+        im_neg = fn_iter_neg(im, renders_it)
+        return it.product((im,), im_pos, im_neg)
     return map(iter_triplets, im_it)
 
 
-def triplet_loss(margin, fn_fwd, anchor, pos, neg):
-    a_embed  = fn_fwd(anchor)
-    a_p_dis  = 1 - F.cosine_similarity(a_embed, fn_fwd(pos))
-    a_n_dis  = 1 - F.cosine_similarity(a_embed, fn_fwd(neg))
-    distance = torch.clamp(a_p_dis - a_n_dis + margin, min=0)
-    return distance
-
-
-def iter_hard_im_triplets(n_im_tp, fn_tp_loss, meta, im_it):
-    def iter_hard_triplets(triplets_it):
+def iter_n_hard_triplets(n, fn_iter_tps, fn_tp_loss, im_it, renders_it):
+    tp_loss = lambda t: (t, float(fn_tp_loss(*t)))
+    sample  = ft.partial(util.rand_sample, 0.1)
+    def choose_hard(tps_it):
         with torch.no_grad():
-            loss_it = map(lambda t: (t, float(fn_tp_loss(*t))), triplets_it)
-            hard_it = map(util.first, sorted(loss_it, key=util.second, reverse=True))
-            return tuple(util.take(n_im_tp, hard_it))
-    return map(iter_hard_triplets, iter_im_triplets(meta, im_it))
+            hard_it = filter(util.second, map(tp_loss, sample(tps_it)))
+            return tuple(util.take(n, map(util.first, hard_it)))
+    return map(choose_hard, fn_iter_tps(im_it, renders_it))
 
 
-def iter_triplet_loss(train_params, fn_fwd, meta, im_it):
-    tp_loss  = ft.partial(triplet_loss, train_params['margin'], util.memoize(fn_fwd))
-    im_tp_it = iter_hard_im_triplets(train_params['im_datapoints'], tp_loss, meta, im_it)
-    return it.starmap(ft.partial(triplet_loss, train_params['margin'], fn_fwd), util.flatten(im_tp_it))
+def triplet_loss(margin, fn_fwd, anchor, pos, neg):
+    a_embed = fn_fwd(anchor['path'])
+    a_p_dis = 1 - F.cosine_similarity(a_embed, fn_fwd(pos['path']))
+    a_n_dis = 1 - F.cosine_similarity(a_embed, fn_fwd(neg['path']))
+    return torch.clamp(a_p_dis - a_n_dis + margin, min=0)
+
+
+def iter_triplet_loss(fn_fwd, params, im_it, renders_it):
+    tp_it = iter_n_hard_triplets(params['n_triplets'],
+        ft.partial(iter_triplets,
+            ft.partial(iter_pos_renders, params['positives']),
+            ft.partial(iter_neg_renders, params['negatives'])),
+        ft.partial(triplet_loss, params['margin'], util.memoize(fn_fwd)), im_it, renders_it)
+    return it.starmap(ft.partial(triplet_loss, params['margin'], fn_fwd), util.flatten(tp_it))
 
 
 def backward(optimizer, loss):
-    optimizer.zero_grad(); loss.backward(); optimizer.step()
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
     return loss
 
 
@@ -81,16 +105,14 @@ def make_track_stats(logfile, stage, im_it, n_im_tp):
             end   = '\n' if ims == total_ims else '\r'
             print(f'\033[K{formatter(stage, ims, speed, loss)}', end=end, file=logfile, flush=True)
         return {'loss': loss, 'speed': speed}
-        #^ Don't accumulate autograd history, hence cast the Variable to float
     return track_stats
 
 
-def train_batch(model, train_params, fn_trans, logfile, meta, batches_total, batch_idx, im_it):
-    bwd     = ft.partial(backward, model['optimizer'])
-    fwd     = ft.partial(forward, model['net'], util.memoize(fn_trans))
-    loss_it = map(bwd, iter_triplet_loss(train_params, fwd, meta, im_it))
+def train_batch(model, params, fn_trans, logfile, meta, batches_total, batch_idx, im_it):
     stage   = f'Batch {util.format_fraction(batch_idx, batches_total)}'
-    stats   = make_track_stats(logfile, stage, im_it, train_params['im_datapoints'])
+    stats   = make_track_stats(logfile, stage, im_it, params['im_datapoints'])
+    loss_it = map(ft.partial(backward, model['optimizer']),
+        iter_triplet_loss(ft.partial(forward, model['net'], fn_trans), params, meta, im_it))
     return ft.reduce(stats, loss_it, {'loss': 0, 'speed': 0})
 
 
@@ -123,7 +145,7 @@ def evaluate_epoch(model, train_params, fn_trans, logfile, meta, im_it):
         model['net'].eval()
         n_im_tp  = n_im_triplets(meta, im_it)
         fwd      = util.memoize(ft.partial(forward, model['net'], fn_trans))
-        im_tp_it = util.flatten(iter_im_triplets(meta, im_it))
+        im_tp_it = util.flatten(iter_triplets(meta, im_it))
         loss_it  = it.starmap(ft.partial(triplet_loss, train_params['margin'], fwd), im_tp_it)
         return ft.reduce(make_track_stats(logfile, 'Eval', im_it, n_im_tp), loss_it, {'loss': 0, 'speed': 0})
 

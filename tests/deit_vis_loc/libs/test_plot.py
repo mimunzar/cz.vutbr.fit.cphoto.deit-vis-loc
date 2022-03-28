@@ -3,7 +3,7 @@
 import collections as cl
 import pytest
 
-import src.deit_vis_loc.plot as plot
+import src.deit_vis_loc.libs.plot as plot
 
 
 def test_im_and_n_closest_segments():

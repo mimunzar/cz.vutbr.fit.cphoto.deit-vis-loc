@@ -59,10 +59,17 @@ def test_nth():
 
 
 def test_flatten():
-    assert list(util.flatten([])) == []
-    assert list(util.flatten([[1, 2, 3]])) == [1, 2, 3]
+    assert list(util.flatten([]))            == []
+    assert list(util.flatten([[1, 2, 3]]))   == [1, 2, 3]
     assert list(util.flatten([[1], [2, 3]])) == [1, 2, 3]
     assert list(util.flatten([[[1, 2, 3]]])) == [[1, 2, 3]]
+
+
+def test_rand_sample():
+    assert list(util.rand_sample(1, [],        lambda: 0)) == []
+    assert list(util.rand_sample(0, [1, 2, 3], lambda: 1)) == []
+    assert list(util.rand_sample(1, [1, 2, 3], lambda: 1)) == []
+    assert list(util.rand_sample(1, [1, 2, 3], lambda: 0)) == [1, 2, 3]
 
 
 def test_pluck():
@@ -70,6 +77,21 @@ def test_pluck():
     assert util.pluck(iter(['foo']), {'foo': 42, 'bar': 43}) == 42
     assert util.pluck(['foo', 'bar'], {'foo': 42, 'bar': 43}) == (42, 43)
     with pytest.raises(KeyError): util.pluck(['baz'], {'foo': 42, 'bar': 43})
+
+
+def test_clamp():
+    assert util.clamp(1, 3, 0) == 1
+    assert util.clamp(1, 3, 1) == 1
+    assert util.clamp(1, 3, 2) == 2
+    assert util.clamp(1, 3, 3) == 3
+    assert util.clamp(1, 3, 4) == 3
+
+
+def test_complement():
+    assert util.complement(lambda: True)()  == False
+    assert util.complement(lambda: False)() == True
+    assert util.complement(lambda i: 0 == i % 2)(1) == True
+    assert util.complement(lambda i: 0 == i % 2)(2) == False
 
 
 def test_validator():

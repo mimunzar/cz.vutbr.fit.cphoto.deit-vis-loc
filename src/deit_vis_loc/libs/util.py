@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-import datetime  as dt
+import collections as cl
+import datetime as dt
 import functools as ft
 import itertools as it
-import math      as ma
-import operator  as op
-import time
+import operator as op
+import random
 import sys
+import time
 
 
 def partition(n, iterable):
@@ -32,6 +33,10 @@ def drop(n, iterable):
     return it.islice(iterable, n, None)
 
 
+def consume(iterable):
+    cl.deque(iterable, maxlen=0)
+
+
 def first(iterable):
     return next(iter(iterable))
 
@@ -48,12 +53,24 @@ def flatten(iterable):
     return it.chain.from_iterable(iterable)
 
 
+def rand_sample(prob, iterable, fn_rand=random.random):
+    return filter(lambda _: fn_rand() < prob, iterable)
+
+
 def pluck(iterable, d):
     return op.itemgetter(*iterable)(d)
 
 
 def memoize(f):
     return ft.lru_cache(maxsize=None)(f)
+
+
+def clamp(minimum, maximum, n):
+    return max(minimum, min(maximum, n))
+
+
+def complement(f):
+    return lambda *args: not f(*args)
 
 
 def make_validator(msg, fn_valid):
@@ -63,7 +80,7 @@ def make_validator(msg, fn_valid):
 def make_checker(validators):
     def check_dict(d):
         checks = it.starmap(lambda k, f: f(d[k]), validators.items())
-        return tuple(map(second, it.filterfalse(first, checks)))
+        return tuple(map(second, filter(complement(first), checks)))
     return check_dict
 
 

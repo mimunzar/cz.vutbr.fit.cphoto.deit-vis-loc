@@ -6,67 +6,33 @@ import torch
 import src.deit_vis_loc.training as training
 
 
-def test_iter_im_pairs():
-    assert list(map(set, training.iter_im_pairs({}, []))) == []
-    meta = {'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}}}
-    assert list(map(set, training.iter_im_pairs(meta, meta.keys()))) == [
-        {('foo', 'foo_p'), ('foo', 'foo_n')}]
-    meta = {
-       'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
-       'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
-    }
-    assert list(map(set, training.iter_im_pairs(meta, meta.keys()))) == [
-        {('foo', 'foo_p'), ('foo', 'foo_n'), ('foo', 'bar_p'), ('foo', 'bar_n')},
-        {('bar', 'bar_p'), ('bar', 'bar_n'), ('bar', 'foo_p'), ('bar', 'foo_n')}]
 
+def test_iter_triplets():
+    im_pos   = lambda im, render: render == f'{im}_p'
+    im_neg   = lambda im, render: render != f'{im}_p'
+    pos_fn   = lambda im, renders_it: filter(ft.partial(im_pos, im), renders_it)
+    neg_fn   = lambda im, renders_it: filter(ft.partial(im_neg, im), renders_it)
+    triplets = ft.partial(training.iter_triplets, pos_fn, neg_fn)
 
-def test_iter_im_triplets():
-    assert list(map(set, training.iter_im_triplets({}, []))) == []
-    meta = {'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}}}
-    assert list(map(set, training.iter_im_triplets(meta, meta.keys()))) == [
-        {('foo', 'foo_p', 'foo_n')}]
-    meta = {
-       'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
-       'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
-    }
-    assert list(map(set, training.iter_im_triplets(meta, meta.keys()))) == [
+    assert list(map(set, triplets({}, []))) == []
+
+    im_it      = ['foo']
+    renders_it = ['foo_p', 'foo_n']
+    assert list(map(set, triplets(im_it, renders_it))) == [
+        {('foo', 'foo_p', 'foo_n')}
+    ]
+
+    im_it      = ['foo', 'bar']
+    renders_it = ['foo_p', 'foo_n', 'bar_p', 'bar_n']
+    assert list(map(set, triplets(im_it, renders_it))) == [
         {('foo', 'foo_p', 'foo_n'), ('foo', 'foo_p', 'bar_p'), ('foo', 'foo_p', 'bar_n')},
-        {('bar', 'bar_p', 'bar_n'), ('bar', 'bar_p', 'foo_n'), ('bar', 'bar_p', 'foo_p')}]
-
-
-def test_iter_hard_im_triplets():
-    loss    = lambda s: int(s.endswith('_p')) + 2*int(s.startswith('foo'))
-    tp_loss = lambda a, p, n: loss(a) + loss(p) + loss(n)
-    meta    = {
-       'foo': {'positive': {'foo_p'}, 'negative': {'foo_n'}},
-       'bar': {'positive': {'bar_p'}, 'negative': {'bar_n'}},
-    }
-    iter_hard  = lambda n, meta: training.iter_hard_im_triplets(n, tp_loss, meta, meta.keys())
-
-    assert list(map(list, iter_hard(3,   {}))) == []
-    assert list(map(list, iter_hard(0, meta))) == [
-            [],
-            [],
-        ]
-    assert list(map(list, iter_hard(1, meta))) == [
-            [('foo', 'foo_p', 'foo_n')],
-            [('bar', 'bar_p', 'foo_p')],
-        ]
-    assert list(map(list, iter_hard(2, meta))) == [
-            [
-                ('foo', 'foo_p', 'foo_n'),
-                ('foo', 'foo_p', 'bar_p'),
-            ],
-            [
-                ('bar', 'bar_p', 'foo_p'),
-                ('bar', 'bar_p', 'foo_n'),
-            ],
-        ]
+        {('bar', 'bar_p', 'bar_n'), ('bar', 'bar_p', 'foo_n'), ('bar', 'bar_p', 'foo_p')},
+    ]
 
 
 def test_triplet_loss():
-    p = torch.tensor([[0., 2.]])
-    n = torch.tensor([[2., 0.]])
+    p = {'path': torch.tensor([[0., 2.]])}
+    n = {'path': torch.tensor([[2., 0.]])}
     l = ft.partial(training.triplet_loss, 0., lambda x: x)
     assert l(p, p, p) == torch.tensor([0.])
     assert l(p, p, n) == torch.tensor([0.])

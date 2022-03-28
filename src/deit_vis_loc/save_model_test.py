@@ -38,7 +38,7 @@ if __name__ == "__main__":
     args         = parse_args(sys.argv[1:])
     fileprefix   = modelpath_to_fileprefix(args['model'])
     train_params = data.read_train_params(os.path.join(os.path.dirname(args['model']), f'{fileprefix}.json'))
-    meta         = data.read_metafile(args['metafile'], args['dataset_dir'], train_params['yaw_tolerance_deg'])
+    meta         = data.read_metafile(args['metafile'])
     test_im_it   = set(util.take(args['dataset_size'], data.read_ims(args['dataset_dir'], 'test.txt')))
     model        = {'device': args['device'], 'net': torch.load(args['model'], map_location=args['device'])}
     formatter    = util.make_progress_formatter(bar_width=40, total=len(test_im_it))
