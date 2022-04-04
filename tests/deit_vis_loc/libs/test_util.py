@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 
-from math import pi
-
 import pytest
 
 import src.deit_vis_loc.libs.util as util
-
 
 
 def test_partition():
@@ -94,6 +91,13 @@ def test_complement():
     assert util.complement(lambda i: 0 == i % 2)(2) == False
 
 
+def test_compose():
+    assert util.compose(next)(iter([1, 2, 3]))           == 1
+    assert util.compose(next, iter)([1, 2, 3])           == 1
+    assert util.compose(str, next, iter)([1, 2, 3])      == "1"
+    assert util.compose(int, str, next, iter)([1, 2, 3]) == 1
+
+
 def test_validator():
     assert util.make_validator('Fail', lambda: False)()    == (False, 'Fail')
     assert util.make_validator('Fail', lambda x: x > 0)(0) == (False, 'Fail')
@@ -108,60 +112,4 @@ def test_checker():
     assert checker({'foo': 0, 'bar': 0, 'baz': 0}) == ('Failed foo', 'Failed bar',)
     assert checker({'foo': 0, 'bar': 1, 'baz': 0}) == ('Failed foo',)
     assert checker({'foo': 1, 'bar': 1, 'baz': 0}) == tuple()
-
-
-def test_print_progress():
-    assert util.progress_bar(1, 1, 0) == '[ ] 0/1'
-    assert util.progress_bar(1, 1, 1) == '[#] 1/1'
-    assert util.progress_bar(1, 1, 2) == '[#] 1/1'
-
-    assert util.progress_bar(5, 1, 0)    == '[     ] 0/1'
-    assert util.progress_bar(5, 1, 0.33) == '[##   ] 0.33/1'
-    assert util.progress_bar(5, 1, 1)    == '[#####] 1/1'
-
-    assert util.progress_bar(10, 5, 0) == '[          ] 0/5'
-    assert util.progress_bar(10, 5, 1) == '[##        ] 1/5'
-    assert util.progress_bar(10, 5, 5) == '[##########] 5/5'
-
-
-def test_format_progress():
-    f = util.make_progress_formatter(bar_width=1, total=1)
-    assert f(stage='Foo', curr=0, speed=0, loss=0) == \
-            '            Foo: [ ] 0/1  (0.00 loss, 0.00 im/s)'
-    assert f(stage='Foo', curr=1, speed=0.5, loss=0.5) == \
-            '            Foo: [#] 1/1  (0.50 loss, 0.50 im/s)'
-    assert f(stage='FooFoo', curr=1, speed=0.5, loss=0.5) == \
-            '         FooFoo: [#] 1/1  (0.50 loss, 0.50 im/s)'
-    assert f(stage='Foo',    curr=1, speed=1000.5, loss=1000.5) == \
-            '            Foo: [#] 1/1  (1000.50 loss, 1000.50 im/s)'
-
-
-def test_format_fraction():
-    assert util.format_fraction(1, 1)   == '1/1'
-    assert util.format_fraction(1, 10)  == ' 1/10'
-    assert util.format_fraction(1, 100) == '  1/100'
-
-
-def test_make_running_avg():
-    ravg = util.make_running_avg()
-    assert ravg(0) == 0
-    assert ravg(2) == 1
-    assert ravg(4) == 2
-    assert ravg(6) == 3
-    assert ravg(8) == 4
-
-
-def test_make_ims_sec():
-    ims_sec = util.make_ims_sec(lambda: 0)
-    assert ims_sec(1, lambda: 1) == 1   # 1 seconds diff
-    assert ims_sec(5, lambda: 6) == 1   # 5 seconds diff
-    assert ims_sec(5, lambda: 6) == 5e6 # 0 seconds diff
-
-
-def test_total_triplets():
-    assert util.im_triplets(1, 1, 1) == 1
-    assert util.im_triplets(1, 1, 2) == 2
-    assert util.im_triplets(2, 1, 1) == 3
-    assert util.im_triplets(1, 2, 2) == 4
-    assert util.im_triplets(2, 2, 2) == 12
 

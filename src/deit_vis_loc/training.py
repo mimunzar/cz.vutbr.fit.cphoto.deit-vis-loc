@@ -51,12 +51,11 @@ def iter_triplets(fn_iter_pos, fn_iter_neg, im_it, renders_it):
 
 
 def iter_n_hard_triplets(n, fn_iter_tps, fn_tp_loss, im_it, renders_it):
-    tp_loss = lambda t: (t, float(fn_tp_loss(*t)))
-    sample  = ft.partial(util.rand_sample, 0.1)
+    loss = util.compose(float, fn_tp_loss)
     def choose_hard(tps_it):
         with torch.no_grad():
-            hard_it = filter(util.second, map(tp_loss, sample(tps_it)))
-            return tuple(util.take(n, map(util.first, hard_it)))
+            loss_it = map(lambda t: (t, loss(*t)), util.rand_sample(0.1, tps_it))
+            return tuple(util.take(n, map(util.first, filter(util.second, loss_it))))
     return map(choose_hard, fn_iter_tps(im_it, renders_it))
 
 
@@ -72,7 +71,7 @@ def iter_triplet_loss(fn_fwd, params, im_it, renders_it):
         ft.partial(iter_triplets,
             ft.partial(iter_pos_renders, params['positives']),
             ft.partial(iter_neg_renders, params['negatives'])),
-        ft.partial(triplet_loss, params['margin'], util.memoize(fn_fwd)), im_it, renders_it)
+        ft.partial(triplet_loss, params['margin'], fn_fwd), im_it, renders_it)
     return it.starmap(ft.partial(triplet_loss, params['margin'], fn_fwd), util.flatten(tp_it))
 
 
