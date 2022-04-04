@@ -43,7 +43,7 @@ def iter_plot_triplets(triplets_it):
 
 if '__main__' == __name__:
     args   = parse_args(sys.argv[1:])
-    im_it  = tuple(load_data.iter_im_data(args['dataset_dir'], 'train.bin'))
+    im_it  = load_data.iter_im_data(args['dataset_dir'], 'train.bin')
     rd_it  = load_data.iter_im_data(args['dataset_dir'], 'renders.bin')
     params = {
         'deit_model' : 'deit_tiny_patch16_224',
@@ -65,13 +65,13 @@ if '__main__' == __name__:
     net = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True)
     net.to(args['device'])
 
-    trans = training.make_im_transform(args['device'], params['input_size'])
-    fwd   = ft.partial(training.forward, net, trans)
+    trans = training.make_load_im(args['device'], params['input_size'])
+    fwd   = util.compose(net, trans)
     tp_it = training.iter_n_hard_triplets(params['n_triplets'],
         ft.partial(training.iter_triplets,
             ft.partial(training.iter_pos_renders, params['positives']),
             ft.partial(training.iter_neg_renders, params['negatives'])),
         ft.partial(training.triplet_loss, params['margin'], util.memoize(fwd)),
-        random.sample(im_it, k=args['n_images']),  rd_it)
+        random.sample(tuple(im_it), k=args['n_images']),  rd_it)
     result = map(iter_plot_triplets, tp_it)
 

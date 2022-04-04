@@ -13,6 +13,7 @@ from PIL import Image
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import src.deit_vis_loc.libs.util as util
+import src.deit_vis_loc.libs.logging as logging
 import src.deit_vis_loc.libs.spherical as spherical
 
 
@@ -67,75 +68,76 @@ def triplet_loss(margin, fn_fwd, anchor, pos, neg):
 
 
 def iter_triplet_loss(fn_fwd, params, im_it, renders_it):
+    loss  = ft.partial(triplet_loss, params['margin'], fn_fwd)
     tp_it = iter_n_hard_triplets(params['n_triplets'],
         ft.partial(iter_triplets,
             ft.partial(iter_pos_renders, params['positives']),
-            ft.partial(iter_neg_renders, params['negatives'])),
-        ft.partial(triplet_loss, params['margin'], fn_fwd), im_it, renders_it)
-    return it.starmap(ft.partial(triplet_loss, params['margin'], fn_fwd), util.flatten(tp_it))
+            ft.partial(iter_neg_renders, params['negatives'])), loss, im_it, renders_it)
+    return it.starmap(loss, util.flatten(tp_it))
 
 
-def backward(optimizer, loss):
+def make_load_im(device, input_size):
+    to_tensor = T.Compose([
+        T.Resize(input_size, interpolation=3),
+        T.ToTensor(),
+        T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
+    ])
+    return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
+
+
+def backward(optimizer, batch_stats):
     optimizer.zero_grad()
-    loss.backward()
+    batch_stats['loss'].backward()
     optimizer.step()
-    return loss
+    return batch_stats
 
 
-def forward(net, fn_trans, im_fpath):
-    return net(fn_trans(im_fpath))
-
-
-def make_track_stats(logfile, stage, im_it, n_im_tp):
+def make_batch_stats(logfile, stage, im_it, n_im_tp):
     im_it       = tuple(im_it)
     total_ims   = len(im_it)
-    avg_ims_sec = util.make_avg_ims_sec()
-    formatter   = util.make_progress_formatter(bar_width=40, total=total_ims)
+    avg_ims_sec = logging.make_avg_ims_sec()
+    formatter   = logging.make_progress_formatter(bar_width=40, total=total_ims)
     ims, tps    = (0, 0)
     print(f'{formatter(stage, ims, 0, 0)}', end='\r', file=logfile, flush=True)
-    def track_stats(acc, loss):
+    def minibatch_stats(acc, loss):
         nonlocal ims, tps
         tps   = tps + 1
         speed = acc['speed']
-        loss  = acc['loss'] + float(loss)
+        loss  = acc['loss'] + loss
         if 0 == tps % n_im_tp:
             ims   = ims + 1
             speed = avg_ims_sec(1)
             end   = '\n' if ims == total_ims else '\r'
-            print(f'\033[K{formatter(stage, ims, speed, loss)}', end=end, file=logfile, flush=True)
+            print(f'\033[K{formatter(stage, ims, speed, float(loss))}', end=end, file=logfile, flush=True)
         return {'loss': loss, 'speed': speed}
-    return track_stats
+    return minibatch_stats
 
 
-def train_batch(model, params, fn_trans, logfile, meta, batches_total, batch_idx, im_it):
-    stage   = f'Batch {util.format_fraction(batch_idx, batches_total)}'
-    stats   = make_track_stats(logfile, stage, im_it, params['im_datapoints'])
-    loss_it = map(ft.partial(backward, model['optimizer']),
-        iter_triplet_loss(ft.partial(forward, model['net'], fn_trans), params, meta, im_it))
-    return ft.reduce(stats, loss_it, {'loss': 0, 'speed': 0})
+def train_batch(model, params, logfile, renders_it, batches_total, batch_id, im_it):
+    im_it   = tuple(im_it)
+    forward = util.compose(model['net'], make_load_im(model['device'], params['input_size']))
+    loss_it = iter_triplet_loss(util.memoize(forward), params, im_it, renders_it)
+    batch_stage = f'Batch {logging.format_fraction(batches_total, batch_id)}'
+    batch_stats = make_batch_stats(logfile, batch_stage, im_it, params['n_triplets'])
+    with torch.enable_grad():
+        model['net'].train()
+        zero = torch.zeros(1, device=model['device'], requires_grad=True)
+        return backward(model['optim'], ft.reduce(batch_stats, loss_it, {'loss': zero, 'speed': 0}))
 
 
 def make_epoch_stats():
     running_avg = util.make_running_avg()
     def epoch_stats(acc, batch_stats):
         speed = running_avg(batch_stats['speed'])
-        loss  = acc['loss'] + batch_stats['loss']
+        loss  = acc['loss'] + float(batch_stats['loss'])
         return {'loss': loss, 'speed': speed}
     return epoch_stats
 
 
-def train_epoch(model, train_params, fn_trans, logfile, meta, im_it):
-    with torch.enable_grad():
-        model['net'].train()
-        batches       = tuple(util.partition(train_params['batch_size'], im_it))
-        batch_loss    = ft.partial(train_batch, model, train_params, fn_trans, logfile, meta, len(batches))
-        batch_loss_it = it.starmap(batch_loss, enumerate(batches, start=1))
-        return ft.reduce(make_epoch_stats(), batch_loss_it, {'loss': 0, 'speed': 0})
-
-
-def n_im_triplets(meta, im_it):
-    p_n_it = util.pluck(['positive', 'negative'], util.first(meta.values()))
-    return util.im_triplets(*map(len, util.prepend(im_it, p_n_it)))
+def train_epoch(model, params, logfile, im_it, renders_it):
+    batch_it = tuple(util.partition(params['batch_size'], im_it))
+    train    = ft.partial(train_batch, model, params, logfile, renders_it, len(batch_it))
+    return ft.reduce(make_epoch_stats(), it.starmap(train, enumerate(batch_it, start=1)))
 
 
 def evaluate_epoch(model, train_params, fn_trans, logfile, meta, im_it):
@@ -147,15 +149,6 @@ def evaluate_epoch(model, train_params, fn_trans, logfile, meta, im_it):
         im_tp_it = util.flatten(iter_triplets(meta, im_it))
         loss_it  = it.starmap(ft.partial(triplet_loss, train_params['margin'], fwd), im_tp_it)
         return ft.reduce(make_track_stats(logfile, 'Eval', im_it, n_im_tp), loss_it, {'loss': 0, 'speed': 0})
-
-
-def make_im_transform(device, input_size):
-    to_tensor = T.Compose([
-        T.Resize(input_size, interpolation=3),
-        T.ToTensor(),
-        T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
-    ])
-    return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
 
 
 def iter_training(model, train_params, logfile, meta, images):

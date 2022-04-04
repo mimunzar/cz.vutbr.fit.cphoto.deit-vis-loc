@@ -5,6 +5,7 @@ import functools as ft
 import itertools as it
 import operator as op
 import random
+import time
 
 
 def partition(n, iterable):
@@ -87,4 +88,18 @@ def make_checker(validators):
         checks = it.starmap(lambda k, f: f(d[k]), validators.items())
         return tuple(map(second, filter(complement(first), checks)))
     return check_dict
+
+
+def epoch_secs():
+    return int(time.time())
+
+
+def make_running_avg():
+    idx, ravg = (0, 0)
+    def running_avg(n):
+        nonlocal idx, ravg
+        idx  = idx + 1
+        ravg = ravg*(idx - 1)/idx + n/idx
+        return ravg
+    return running_avg
 

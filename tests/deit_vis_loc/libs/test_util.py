@@ -113,3 +113,12 @@ def test_checker():
     assert checker({'foo': 0, 'bar': 1, 'baz': 0}) == ('Failed foo',)
     assert checker({'foo': 1, 'bar': 1, 'baz': 0}) == tuple()
 
+
+def test_make_running_avg():
+    ravg = util.make_running_avg()
+    assert ravg(0) == 0
+    assert ravg(2) == 1
+    assert ravg(4) == 2
+    assert ravg(6) == 3
+    assert ravg(8) == 4
+
