@@ -18,17 +18,17 @@ def format_fraction(n, d):
     return f'{n:>{d_len}}/{d}'
 
 
-def progress_bar(bar_width, total, curr):
+def format_bar(bar_width, total, curr):
     curr = min(curr, total)
     bar  = ('#'*round(curr/total*bar_width)).ljust(bar_width)
     return f'[{bar}] {format_fraction(curr, total)}'
 
 
-def make_progress_formatter(bar_width, total):
-    prog_bar = ft.partial(progress_bar, bar_width, total)
-    def progress_formatter(stage, curr, speed, loss):
-        return f'{stage:>15}: {prog_bar(curr)}  ({loss:.2f} loss, {speed:.02f} im/s)'
-    return progress_formatter
+def make_progress_bar(bar_width, total):
+    bar = ft.partial(format_bar, bar_width, total)
+    def progress_bar(stage, curr, speed, loss):
+        return f'{stage:>15}: {bar(curr)}  ({loss:.2f} loss, {speed:.02f} im/s)'
+    return progress_bar
 
 
 def make_ims_sec(fn_epoch_secs=time.time):

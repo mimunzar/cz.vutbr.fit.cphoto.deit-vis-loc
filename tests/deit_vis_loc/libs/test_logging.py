@@ -4,17 +4,17 @@ import src.deit_vis_loc.libs.logging as logging
 
 
 def test_progress_bar():
-    assert logging.progress_bar(1, 1, 0) == '[ ] 0/1'
-    assert logging.progress_bar(1, 1, 1) == '[#] 1/1'
-    assert logging.progress_bar(1, 1, 2) == '[#] 1/1'
+    assert logging.format_bar(1, 1, 0) == '[ ] 0/1'
+    assert logging.format_bar(1, 1, 1) == '[#] 1/1'
+    assert logging.format_bar(1, 1, 2) == '[#] 1/1'
 
-    assert logging.progress_bar(5, 1, 0)    == '[     ] 0/1'
-    assert logging.progress_bar(5, 1, 0.33) == '[##   ] 0.33/1'
-    assert logging.progress_bar(5, 1, 1)    == '[#####] 1/1'
+    assert logging.format_bar(5, 1, 0)    == '[     ] 0/1'
+    assert logging.format_bar(5, 1, 0.33) == '[##   ] 0.33/1'
+    assert logging.format_bar(5, 1, 1)    == '[#####] 1/1'
 
-    assert logging.progress_bar(10, 5, 0) == '[          ] 0/5'
-    assert logging.progress_bar(10, 5, 1) == '[##        ] 1/5'
-    assert logging.progress_bar(10, 5, 5) == '[##########] 5/5'
+    assert logging.format_bar(10, 5, 0) == '[          ] 0/5'
+    assert logging.format_bar(10, 5, 1) == '[##        ] 1/5'
+    assert logging.format_bar(10, 5, 5) == '[##########] 5/5'
 
 
 def test_format_fraction():

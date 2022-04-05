@@ -5,6 +5,7 @@ import functools as ft
 import itertools as it
 import math as ma
 import random
+import statistics as st
 
 import torch
 import torch.nn.functional as F
@@ -51,12 +52,20 @@ def iter_triplets(fn_iter_pos, fn_iter_neg, im_it, renders_it):
     return map(iter_triplets, im_it)
 
 
-def iter_n_hard_triplets(n, fn_iter_tps, fn_tp_loss, im_it, renders_it):
-    loss = util.compose(float, fn_tp_loss)
+def mining_stats(acc, mining_stats):
+    return {
+        'triplets': [*acc['triplets'], util.nth(2, mining_stats)],
+        'samples' : util.second(mining_stats),
+    }
+
+
+def iter_mine_triplets(n, fn_iter_tps, fn_tp_loss, im_it, renders_it):
+    prepend_loss = lambda x: (float(fn_tp_loss(*x[1])), *x)
     def choose_hard(tps_it):
         with torch.no_grad():
-            loss_it = map(lambda t: (t, loss(*t)), util.rand_sample(0.1, tps_it))
-            return tuple(util.take(n, map(util.first, filter(util.second, loss_it))))
+            samp_it = enumerate(util.rand_sample(0.1, tps_it), 1)
+            hard_it = util.take(n, filter(util.first, map(prepend_loss, samp_it)))
+            return ft.reduce(mining_stats, hard_it, {'samples': 0, 'triplets': []})
     return map(choose_hard, fn_iter_tps(im_it, renders_it))
 
 
@@ -67,13 +76,13 @@ def triplet_loss(margin, fn_fwd, anchor, pos, neg):
     return torch.clamp(a_p_dis - a_n_dis + margin, min=0)
 
 
-def iter_triplet_loss(fn_fwd, params, im_it, renders_it):
-    loss  = ft.partial(triplet_loss, params['margin'], fn_fwd)
-    tp_it = iter_n_hard_triplets(params['n_triplets'],
+def iter_mined_stats(fn_fwd, params, im_it, renders_it):
+    loss     = ft.partial(triplet_loss, params['margin'], fn_fwd)
+    mined_it = iter_mine_triplets(params['n_triplets'],
         ft.partial(iter_triplets,
             ft.partial(iter_pos_renders, params['positives']),
             ft.partial(iter_neg_renders, params['negatives'])), loss, im_it, renders_it)
-    return it.starmap(loss, util.flatten(tp_it))
+    return map(lambda m: {**m, 'loss': sum(it.starmap(loss, m['triplets']))}, mined_it)
 
 
 def make_load_im(device, input_size):
@@ -85,44 +94,39 @@ def make_load_im(device, input_size):
     return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
 
 
-def backward(optimizer, batch_stats):
-    optimizer.zero_grad()
-    batch_stats['loss'].backward()
-    optimizer.step()
+def backward(optim, loss):
+    optim.zero_grad()
+    loss.backward()
+    optim.step()
+    return loss
+
+
+def make_batch_stats(stage, logfile, im_it):
+    total_ims = len(im_it)
+    avg_imsec = logging.make_avg_ims_sec()
+    prog_bar  = logging.make_progress_bar(bar_width=30, total=total_ims)
+    print(f'{prog_bar(stage, 0, 0, 0)}', end='\r', file=logfile, flush=True)
+    def batch_stats(acc, x):
+        i, mined_stats = x
+        speed = avg_imsec(1)
+        loss  = acc['loss'] + mined_stats['loss']
+        end   = '\n' if i == total_ims else '\r'
+        print(f'\033[K{prog_bar(stage, i, speed, float(loss))}', end=end, file=logfile, flush=True)
+        return {'loss': loss, 'speed': speed, 'samples': [*acc['samples'], mined_stats['samples']]}
     return batch_stats
 
 
-def make_batch_stats(logfile, stage, im_it, n_im_tp):
-    im_it       = tuple(im_it)
-    total_ims   = len(im_it)
-    avg_ims_sec = logging.make_avg_ims_sec()
-    formatter   = logging.make_progress_formatter(bar_width=40, total=total_ims)
-    ims, tps    = (0, 0)
-    print(f'{formatter(stage, ims, 0, 0)}', end='\r', file=logfile, flush=True)
-    def minibatch_stats(acc, loss):
-        nonlocal ims, tps
-        tps   = tps + 1
-        speed = acc['speed']
-        loss  = acc['loss'] + loss
-        if 0 == tps % n_im_tp:
-            ims   = ims + 1
-            speed = avg_ims_sec(1)
-            end   = '\n' if ims == total_ims else '\r'
-            print(f'\033[K{formatter(stage, ims, speed, float(loss))}', end=end, file=logfile, flush=True)
-        return {'loss': loss, 'speed': speed}
-    return minibatch_stats
-
-
 def train_batch(model, params, logfile, renders_it, batches_total, batch_id, im_it):
-    im_it   = tuple(im_it)
-    forward = util.compose(model['net'], make_load_im(model['device'], params['input_size']))
-    loss_it = iter_triplet_loss(util.memoize(forward), params, im_it, renders_it)
-    batch_stage = f'Batch {logging.format_fraction(batches_total, batch_id)}'
-    batch_stats = make_batch_stats(logfile, batch_stage, im_it, params['n_triplets'])
+    im_it = tuple(im_it)
+    bwd   = util.compose(float, ft.partial(backward, model['optim']))
+    fwd   = util.compose(model['net'], make_load_im(model['device'], params['input_size']))
+    ms_it = iter_mined_stats(util.memoize(fwd), params, im_it, renders_it)
+    stats = make_batch_stats(f'Batch {logging.format_fraction(batches_total, batch_id)}', logfile, im_it)
     with torch.enable_grad():
         model['net'].train()
         zero = torch.zeros(1, device=model['device'], requires_grad=True)
-        return backward(model['optim'], ft.reduce(batch_stats, loss_it, {'loss': zero, 'speed': 0}))
+        stat = ft.reduce(stats, enumerate(ms_it, 1), {'loss': zero, 'speed': 0, 'samples': []})
+        return {**stat, 'loss': bwd(stat['loss']), 'samples': st.median(stat['samples'])}
 
 
 def make_epoch_stats():

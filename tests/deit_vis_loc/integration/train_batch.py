@@ -29,7 +29,7 @@ if '__main__' == __name__:
         'deit_model' : 'deit_tiny_patch16_224',
         'input_size' : 224,
         'margin'     : 0.2,
-        'n_triplets' : 5,
+        'n_triplets' : 10,
         'lr'         : 1e-3,
         'batch_size' : 16,
         'positives'  : {

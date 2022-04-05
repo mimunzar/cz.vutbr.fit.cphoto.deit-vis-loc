@@ -33,12 +33,12 @@ def plot_im_on_axis(im, axis):
     return im
 
 
-def iter_plot_triplets(triplets_it):
+def iter_plot_mined_triplets(mined):
     figure   = mpplt.figure(tight_layout=True)
-    grid     = figure.add_gridspec(nrows=len(triplets_it), ncols=3)
+    grid     = figure.add_gridspec(nrows=len(mined['triplets']), ncols=3)
     plot_im  = lambda r, c, im: plot_im_on_axis(im, figure.add_subplot(grid[r, c]))
     plot_row = lambda r, im_it: tuple(it.starmap(ft.partial(plot_im, r), enumerate(im_it)))
-    return tuple(it.starmap(plot_row, enumerate(triplets_it)))
+    return {**mined, 'triplets': tuple(it.starmap(plot_row, enumerate(mined['triplets'])))}
 
 
 if '__main__' == __name__:
@@ -65,13 +65,13 @@ if '__main__' == __name__:
     net = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True)
     net.to(args['device'])
 
-    trans = training.make_load_im(args['device'], params['input_size'])
-    fwd   = util.compose(net, trans)
-    tp_it = training.iter_n_hard_triplets(params['n_triplets'],
+    transform = training.make_load_im(args['device'], params['input_size'])
+    forward   = util.compose(net, transform)
+    mined_it  = training.iter_mine_triplets(params['n_triplets'],
         ft.partial(training.iter_triplets,
             ft.partial(training.iter_pos_renders, params['positives']),
             ft.partial(training.iter_neg_renders, params['negatives'])),
-        ft.partial(training.triplet_loss, params['margin'], util.memoize(fwd)),
+        ft.partial(training.triplet_loss, params['margin'], util.memoize(forward)),
         random.sample(tuple(im_it), k=args['n_images']),  rd_it)
-    result = map(iter_plot_triplets, tp_it)
+    result = map(iter_plot_mined_triplets, mined_it)
 
