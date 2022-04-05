@@ -67,7 +67,7 @@ if '__main__' == __name__:
 
     transform = training.make_load_im(args['device'], params['input_size'])
     forward   = util.compose(net, transform)
-    mined_it  = training.iter_mine_triplets(params['n_triplets'],
+    mined_it  = training.iter_mined_triplets(params['n_triplets'],
         ft.partial(training.iter_triplets,
             ft.partial(training.iter_pos_renders, params['positives']),
             ft.partial(training.iter_neg_renders, params['negatives'])),

@@ -59,7 +59,7 @@ def mining_stats(acc, mining_stats):
     }
 
 
-def iter_mine_triplets(n, fn_iter_tps, fn_tp_loss, im_it, renders_it):
+def iter_mined_triplets(n, fn_iter_tps, fn_tp_loss, im_it, renders_it):
     prepend_loss = lambda x: (float(fn_tp_loss(*x[1])), *x)
     def choose_hard(tps_it):
         with torch.no_grad():
@@ -76,9 +76,9 @@ def triplet_loss(margin, fn_fwd, anchor, pos, neg):
     return torch.clamp(a_p_dis - a_n_dis + margin, min=0)
 
 
-def iter_mined_stats(fn_fwd, params, im_it, renders_it):
+def iter_triplet_loss(fn_fwd, params, im_it, renders_it):
     loss     = ft.partial(triplet_loss, params['margin'], fn_fwd)
-    mined_it = iter_mine_triplets(params['n_triplets'],
+    mined_it = iter_mined_triplets(params['n_triplets'],
         ft.partial(iter_triplets,
             ft.partial(iter_pos_renders, params['positives']),
             ft.partial(iter_neg_renders, params['negatives'])), loss, im_it, renders_it)
@@ -101,27 +101,27 @@ def backward(optim, loss):
     return loss
 
 
-def make_batch_stats(stage, logfile, im_it):
+def make_minibatch_stats(stage, logfile, im_it):
     total_ims = len(im_it)
     avg_imsec = logging.make_avg_ims_sec()
     prog_bar  = logging.make_progress_bar(bar_width=30, total=total_ims)
     print(f'{prog_bar(stage, 0, 0, 0)}', end='\r', file=logfile, flush=True)
-    def batch_stats(acc, x):
+    def minibatch_stats(acc, x):
         i, mined_stats = x
         speed = avg_imsec(1)
         loss  = acc['loss'] + mined_stats['loss']
         end   = '\n' if i == total_ims else '\r'
         print(f'\033[K{prog_bar(stage, i, speed, float(loss))}', end=end, file=logfile, flush=True)
         return {'loss': loss, 'speed': speed, 'samples': [*acc['samples'], mined_stats['samples']]}
-    return batch_stats
+    return minibatch_stats
 
 
-def train_batch(model, params, logfile, renders_it, batches_total, batch_id, im_it):
+def train_minibatch(model, params, logfile, renders_it, batches_total, batch_id, im_it):
     im_it = tuple(im_it)
     bwd   = util.compose(float, ft.partial(backward, model['optim']))
     fwd   = util.compose(model['net'], make_load_im(model['device'], params['input_size']))
-    ms_it = iter_mined_stats(util.memoize(fwd), params, im_it, renders_it)
-    stats = make_batch_stats(f'Batch {logging.format_fraction(batches_total, batch_id)}', logfile, im_it)
+    ms_it = iter_triplet_loss(util.memoize(fwd), params, im_it, renders_it)
+    stats = make_minibatch_stats(f'Batch {logging.format_fraction(batch_id, batches_total)}', logfile, im_it)
     with torch.enable_grad():
         model['net'].train()
         zero = torch.zeros(1, device=model['device'], requires_grad=True)
@@ -130,18 +130,18 @@ def train_batch(model, params, logfile, renders_it, batches_total, batch_id, im_
 
 
 def make_epoch_stats():
-    running_avg = util.make_running_avg()
+    ravg_loss = util.make_running_avg()
     def epoch_stats(acc, batch_stats):
-        speed = running_avg(batch_stats['speed'])
-        loss  = acc['loss'] + float(batch_stats['loss'])
-        return {'loss': loss, 'speed': speed}
+        loss = ravg_loss(batch_stats['loss'])
+        return {'avg_loss': loss, 'batch_stats': [*acc['batch_stats'], batch_stats]}
     return epoch_stats
 
 
 def train_epoch(model, params, logfile, im_it, renders_it):
-    batch_it = tuple(util.partition(params['batch_size'], im_it))
-    train    = ft.partial(train_batch, model, params, logfile, renders_it, len(batch_it))
-    return ft.reduce(make_epoch_stats(), it.starmap(train, enumerate(batch_it, start=1)))
+    renders_it = tuple(renders_it)
+    batch_it   = tuple(enumerate(util.partition(params['batch_size'], im_it), 1))
+    train      = ft.partial(train_minibatch, model, params, logfile, renders_it, len(batch_it))
+    return ft.reduce(make_epoch_stats(), it.starmap(train, batch_it), {'avg_loss': 0, 'batch_stats': []})
 
 
 def evaluate_epoch(model, train_params, fn_trans, logfile, meta, im_it):
@@ -155,17 +155,17 @@ def evaluate_epoch(model, train_params, fn_trans, logfile, meta, im_it):
         return ft.reduce(make_track_stats(logfile, 'Eval', im_it, n_im_tp), loss_it, {'loss': 0, 'speed': 0})
 
 
-def iter_training(model, train_params, logfile, meta, images):
+def iter_training(model, params, logfile, images, renders_it):
     input_len = len(images['train'])
-    pluck     = ft.partial(util.pluck, ['loss', 'speed'])
-    transform = make_im_transform(model['device'], train_params['input_size'])
+    pluck     = ft.partial(util.pluck, ['samples', 'loss', 'speed'])
     def train_and_evaluate_epoch(epoch):
         im_it = random.sample(images['train'], k=input_len)
         #^ Shuffle dataset so generated batches are different every time
-        tloss, tspeed = pluck(train_epoch   (model, train_params, transform, logfile, meta, im_it))
-        vloss, vspeed = pluck(evaluate_epoch(model, train_params, transform, logfile, meta, images['val']))
-        return {'epoch': epoch, 'tloss': tloss, 'vloss': vloss, 'tspeed': tspeed, 'vspeed': vspeed}
+        tloss, tspeed, tsamples = pluck(train_epoch(model, params, logfile, im_it, renders_it))
+        fn_on_epoch()
+        return {'epoch': epoch, 'tloss': tloss}
     return map(train_and_evaluate_epoch, it.count(1))
+
 
 
 def make_is_learning(patience, min_delta):
