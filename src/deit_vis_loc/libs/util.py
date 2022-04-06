@@ -59,6 +59,11 @@ def pluck(iterable, d):
     return op.itemgetter(*iterable)(d)
 
 
+def update(k, f, d):
+    d[k] = f(d[k]) if k in d else f()
+    return d
+
+
 def memoize(f):
     return ft.lru_cache(maxsize=None)(f)
 

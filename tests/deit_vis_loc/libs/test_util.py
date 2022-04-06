@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import pytest
-
 import src.deit_vis_loc.libs.util as util
 
 
@@ -74,6 +73,11 @@ def test_pluck():
     assert util.pluck(iter(['foo']), {'foo': 42, 'bar': 43}) == 42
     assert util.pluck(['foo', 'bar'], {'foo': 42, 'bar': 43}) == (42, 43)
     with pytest.raises(KeyError): util.pluck(['baz'], {'foo': 42, 'bar': 43})
+
+
+def test_update():
+    assert util.update('foo', lambda: 42, {})               == {'foo': 42}
+    assert util.update('foo', lambda x: x + 1, {'foo': 42}) == {'foo': 43}
 
 
 def test_clamp():

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import argparse
-import random
 import sys
 import torch.hub
 import torch.optim
 
 import src.deit_vis_loc.preprocessing.load_data as load_data
+import src.deit_vis_loc.libs.util as util
 import src.deit_vis_loc.training as training
 
 
@@ -23,7 +23,10 @@ def parse_args(args_it):
 
 if '__main__' == __name__:
     args   = parse_args(sys.argv[1:])
-    im_it  = load_data.iter_im_data(args['dataset_dir'], 'val.bin')
+    images =  {
+        'train' : util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'train.bin')),
+        'val'   : util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'val.bin')),
+    }
     rd_it  = load_data.iter_im_data(args['dataset_dir'], 'renders.bin')
     params = {
         'deit_model' : 'deit_tiny_patch16_224',
@@ -47,6 +50,5 @@ if '__main__' == __name__:
     net    = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True).to(args['device'])
     optim  = torch.optim.AdamW(net.parameters(), params['lr'])
     model  = {'device': args['device'], 'net': net, 'optim': optim}
-    result = training.do_epoch(training.eval_minibatch,
-            model, params, sys.stdout, random.sample(tuple(im_it), k=args['n_images']), rd_it)
+    result = training.iter_training(model, params, sys.stdout, images, rd_it)
 

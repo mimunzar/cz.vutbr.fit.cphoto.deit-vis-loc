@@ -127,18 +127,17 @@ def backward(optim, loss):
     return loss
 
 
-def train_on_minibatch(model, params, logfile, renders_it, batches_total, batch_id, im_it):
+def train_on_minibatch(model, *args):
     with torch.enable_grad():
         model['net'].train()
-        s = minibatch_stats(model, params, logfile, renders_it, batches_total, batch_id, im_it);
-        return {**s, 'loss': float(backward(model['optim'], s['loss']))}
+        bwd = util.compose(float, ft.partial(backward, model['optim']))
+        return util.update('loss', bwd, minibatch_stats(model, *args))
 
 
-def eval_minibatch(model, params, logfile, renders_it, batches_total, batch_id, im_it):
+def eval_minibatch(model, *args):
     with torch.no_grad():
         model['net'].eval()
-        s = minibatch_stats(model, params, logfile, renders_it, batches_total, batch_id, im_it);
-        return {**s, 'loss': float(s['loss'])}
+        return util.update('loss', float, minibatch_stats(model, *args))
 
 
 def make_epoch_stats():
@@ -149,20 +148,24 @@ def make_epoch_stats():
     return epoch_stats
 
 
-def do_epoch(fn_minibatch_apply, model, params, logfile, im_it, renders_it):
-    renders_it = tuple(renders_it)
+def do_epoch(fn_batch_apply, fn_onstart, epoch, model, params, logfile, im_it, renders_it):
+    fn_onstart(epoch)
     minib_it   = tuple(enumerate(util.partition(params['batch_size'], im_it), 1))
-    app_minib  = ft.partial(fn_minibatch_apply, model, params, logfile, renders_it, len(minib_it))
+    app_minib  = ft.partial(fn_batch_apply, model, params, logfile, renders_it, len(minib_it))
     return ft.reduce(make_epoch_stats(), it.starmap(app_minib, minib_it), {'avg_loss': 0, 'batches': []})
 
 
 def iter_training(model, params, logfile, images, renders_it):
-    input_len = len(images['train'])
-    pluck     = ft.partial(util.pluck, ['samples', 'loss', 'speed'])
+    renders_it  = tuple(renders_it)
+    t_it, v_it  = map(list, util.pluck(['train', 'val'], images))
+    train_epoch = ft.partial(do_epoch, train_on_minibatch, lambda e: log.log(f'Training epoch {e}:\n', start='\n'))
+    eval_epoch  = ft.partial(do_epoch, eval_minibatch,     lambda e: log.log(f'Evaluating epoch {e}:\n', start='\n'))
     def train_and_evaluate_epoch(epoch):
-        im_it = random.sample(images['train'], k=input_len)
-        #^ Shuffle dataset so generated batches are different every time
-        return {'epoch': epoch, 'tloss': tloss}
+        random.shuffle(t_it)
+        random.shuffle(v_it)
+        t = train_epoch(epoch, model, params, logfile, t_it, renders_it)
+        v = eval_epoch (epoch, model, params, logfile, v_it, renders_it)
+        return {'epoch': epoch, 'train': t, 'val': v}
     return map(train_and_evaluate_epoch, it.count(1))
 
 
@@ -179,7 +182,7 @@ def make_is_learning(patience, min_delta):
 
 
 def train_stats(model, logfile, epoch, tloss, vloss, tspeed, vspeed, **rest):
-    util.log(f'Epoch {epoch} ended, tloss: {tloss:.2f}, vloss: {vloss:.2f}, '
+    log.log(f'Epoch {epoch} ended, tloss: {tloss:.2f}, vloss: {vloss:.2f}, '
            + f'tspeed {tspeed:.2f}, vspeed {vspeed:.2f} im/s\n\n', start='\n', file=logfile)
     model['save_net'](epoch)
     return {**{'epoch': epoch, 'tloss': tloss, 'vloss': vloss}, **rest}
@@ -190,21 +193,4 @@ def train(model, train_params, logfile, meta, images):
     training_it = iter_training(model, train_params, logfile, meta, images)
     learning_it = it.takewhile(is_learning, util.take(train_params['max_epochs'], training_it))
     return min(map(lambda d: train_stats(model, logfile, **d), learning_it), key=ft.partial(util.pluck, ['vloss']))
-
-
-def im_score(fn_fwd, meta, im, im_pairs_it):
-    def pair_score(im, seg):
-        distance = float(torch.cdist(fn_fwd(im), fn_fwd(seg)))
-        positive = seg in meta[im]['positive']
-        return {'segment': seg ,'is_pos': positive, 'dist': distance}
-    return (im, sorted(it.starmap(pair_score, im_pairs_it), key=ft.partial(util.pluck, ['dist'])))
-
-
-def test(model, train_params, meta, im_it):
-    im_it = tuple(im_it)
-    with torch.no_grad():
-        model['net'].eval()
-        transform = make_im_transform(model['device'], train_params['input_size'])
-        fwd       = util.memoize(ft.partial(forward, model['net'], transform))
-        yield from it.starmap(ft.partial(im_score, fwd, meta), zip(im_it, iter_im_pairs(meta, im_it)))
 
