@@ -14,7 +14,7 @@ from PIL import Image
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import src.deit_vis_loc.libs.util as util
-import src.deit_vis_loc.libs.logging as logging
+import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.spherical as spherical
 
 
@@ -94,6 +94,32 @@ def make_load_im(device, input_size):
     return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
 
 
+def make_minibatch_stats(stage, logfile, im_it):
+    total_ims = len(im_it)
+    avg_imsec = log.make_avg_ims_sec()
+    prog_bar  = log.make_progress_bar(bar_width=30, total=total_ims)
+    print(f'{prog_bar(stage, 0, 0, 0)}', end='\r', file=logfile, flush=True)
+    def minibatch_stats(acc, x):
+        i, mined_stats = x
+        speed = avg_imsec(1)
+        loss  = acc['loss'] + mined_stats['loss']
+        samp  = [*acc['samples'], mined_stats['samples']]
+        last  = i == total_ims
+        print(f'\033[K{prog_bar(stage, i, speed, float(loss))}',
+                end='\n' if last else '\r' , file=logfile, flush=True)
+        return {'loss': loss, 'speed': speed, 'samples': st.median(samp) if last else samp}
+    return minibatch_stats
+
+
+def minibatch_stats(model, params, logfile, renders_it, batches_total, batch_id, im_it):
+    im_it = tuple(im_it)
+    zero  = torch.zeros(1, device=model['device'], requires_grad=torch.is_grad_enabled())
+    fwd   = util.compose(model['net'], make_load_im(model['device'], params['input_size']))
+    ls_it = enumerate(iter_triplet_loss(util.memoize(fwd), params, im_it, renders_it), 1)
+    stats = make_minibatch_stats(f'Batch {log.fmt_fraction(batch_id, batches_total)}', logfile, im_it)
+    return ft.reduce(stats, ls_it, {'loss': zero, 'speed': 0, 'samples': []})
+
+
 def backward(optim, loss):
     optim.zero_grad()
     loss.backward()
@@ -101,58 +127,33 @@ def backward(optim, loss):
     return loss
 
 
-def make_minibatch_stats(stage, logfile, im_it):
-    total_ims = len(im_it)
-    avg_imsec = logging.make_avg_ims_sec()
-    prog_bar  = logging.make_progress_bar(bar_width=30, total=total_ims)
-    print(f'{prog_bar(stage, 0, 0, 0)}', end='\r', file=logfile, flush=True)
-    def minibatch_stats(acc, x):
-        i, mined_stats = x
-        speed = avg_imsec(1)
-        loss  = acc['loss'] + mined_stats['loss']
-        end   = '\n' if i == total_ims else '\r'
-        print(f'\033[K{prog_bar(stage, i, speed, float(loss))}', end=end, file=logfile, flush=True)
-        return {'loss': loss, 'speed': speed, 'samples': [*acc['samples'], mined_stats['samples']]}
-    return minibatch_stats
-
-
-def train_minibatch(model, params, logfile, renders_it, batches_total, batch_id, im_it):
-    im_it = tuple(im_it)
-    bwd   = util.compose(float, ft.partial(backward, model['optim']))
-    fwd   = util.compose(model['net'], make_load_im(model['device'], params['input_size']))
-    ms_it = iter_triplet_loss(util.memoize(fwd), params, im_it, renders_it)
-    stats = make_minibatch_stats(f'Batch {logging.format_fraction(batch_id, batches_total)}', logfile, im_it)
+def train_on_minibatch(model, params, logfile, renders_it, batches_total, batch_id, im_it):
     with torch.enable_grad():
         model['net'].train()
-        zero = torch.zeros(1, device=model['device'], requires_grad=True)
-        stat = ft.reduce(stats, enumerate(ms_it, 1), {'loss': zero, 'speed': 0, 'samples': []})
-        return {**stat, 'loss': bwd(stat['loss']), 'samples': st.median(stat['samples'])}
+        s = minibatch_stats(model, params, logfile, renders_it, batches_total, batch_id, im_it);
+        return {**s, 'loss': float(backward(model['optim'], s['loss']))}
+
+
+def eval_minibatch(model, params, logfile, renders_it, batches_total, batch_id, im_it):
+    with torch.no_grad():
+        model['net'].eval()
+        s = minibatch_stats(model, params, logfile, renders_it, batches_total, batch_id, im_it);
+        return {**s, 'loss': float(s['loss'])}
 
 
 def make_epoch_stats():
     ravg_loss = util.make_running_avg()
     def epoch_stats(acc, batch_stats):
         loss = ravg_loss(batch_stats['loss'])
-        return {'avg_loss': loss, 'batch_stats': [*acc['batch_stats'], batch_stats]}
+        return {'avg_loss': loss, 'batches': [*acc['batches'], batch_stats]}
     return epoch_stats
 
 
-def train_epoch(model, params, logfile, im_it, renders_it):
+def do_epoch(fn_minibatch_apply, model, params, logfile, im_it, renders_it):
     renders_it = tuple(renders_it)
-    batch_it   = tuple(enumerate(util.partition(params['batch_size'], im_it), 1))
-    train      = ft.partial(train_minibatch, model, params, logfile, renders_it, len(batch_it))
-    return ft.reduce(make_epoch_stats(), it.starmap(train, batch_it), {'avg_loss': 0, 'batch_stats': []})
-
-
-def evaluate_epoch(model, train_params, fn_trans, logfile, meta, im_it):
-    im_it = tuple(im_it)
-    with torch.no_grad():
-        model['net'].eval()
-        n_im_tp  = n_im_triplets(meta, im_it)
-        fwd      = util.memoize(ft.partial(forward, model['net'], fn_trans))
-        im_tp_it = util.flatten(iter_triplets(meta, im_it))
-        loss_it  = it.starmap(ft.partial(triplet_loss, train_params['margin'], fwd), im_tp_it)
-        return ft.reduce(make_track_stats(logfile, 'Eval', im_it, n_im_tp), loss_it, {'loss': 0, 'speed': 0})
+    minib_it   = tuple(enumerate(util.partition(params['batch_size'], im_it), 1))
+    app_minib  = ft.partial(fn_minibatch_apply, model, params, logfile, renders_it, len(minib_it))
+    return ft.reduce(make_epoch_stats(), it.starmap(app_minib, minib_it), {'avg_loss': 0, 'batches': []})
 
 
 def iter_training(model, params, logfile, images, renders_it):
@@ -161,11 +162,8 @@ def iter_training(model, params, logfile, images, renders_it):
     def train_and_evaluate_epoch(epoch):
         im_it = random.sample(images['train'], k=input_len)
         #^ Shuffle dataset so generated batches are different every time
-        tloss, tspeed, tsamples = pluck(train_epoch(model, params, logfile, im_it, renders_it))
-        fn_on_epoch()
         return {'epoch': epoch, 'tloss': tloss}
     return map(train_and_evaluate_epoch, it.count(1))
-
 
 
 def make_is_learning(patience, min_delta):

@@ -13,19 +13,19 @@ def log(msg, start='', end='\n', file=sys.stdout):
     print(f'{start}[{d.strftime("%Y%m%dT%H%M%S")}] {msg}', end=end, file=file)
 
 
-def format_fraction(n, d):
+def fmt_fraction(n, d):
     d_len = len(str(d))
     return f'{n:>{d_len}}/{d}'
 
 
-def format_bar(bar_width, total, curr):
+def fmt_bar(bar_width, total, curr):
     curr = min(curr, total)
     bar  = ('#'*round(curr/total*bar_width)).ljust(bar_width)
-    return f'[{bar}] {format_fraction(curr, total)}'
+    return f'[{bar}] {fmt_fraction(curr, total)}'
 
 
 def make_progress_bar(bar_width, total):
-    bar = ft.partial(format_bar, bar_width, total)
+    bar = ft.partial(fmt_bar, bar_width, total)
     def progress_bar(stage, curr, speed, loss):
         return f'{stage:>15}: {bar(curr)}  ({loss:.2f} loss, {speed:.02f} im/s)'
     return progress_bar
