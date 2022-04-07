@@ -142,23 +142,24 @@ def eval_minibatch(model, *args):
 def make_epoch_stats():
     ravg_loss = util.make_running_avg()
     def epoch_stats(acc, batch_stats):
-        loss = ravg_loss(batch_stats['loss'])
-        return {'loss': loss, 'batches': [*acc['batches'], batch_stats]}
+        util.update('loss',    lambda _: ravg_loss(batch_stats['loss']), acc)
+        util.update('batches', lambda b: [*b, batch_stats], acc)
+        return acc
     return epoch_stats
 
 
 def do_epoch(fn_batch_apply, fn_onstart, epoch, model, params, logfile, im_it, rd_it):
     fn_onstart(epoch)
-    rd_it = tuple(rd_it)
-    minib_it   = tuple(enumerate(util.partition(params['batch_size'], im_it), 1))
-    app_minib  = ft.partial(fn_batch_apply, model, params, logfile, rd_it, len(minib_it))
-    return ft.reduce(make_epoch_stats(), it.starmap(app_minib, minib_it), {'loss': 0, 'batches': []})
+    rd_it    = tuple(rd_it)
+    minib_it = tuple(enumerate(util.partition(params['batch_size'], im_it), 1))
+    do_minib = ft.partial(fn_batch_apply, model, params, logfile, rd_it, len(minib_it))
+    return ft.reduce(make_epoch_stats(), it.starmap(do_minib, minib_it), {'loss': 0, 'batches': []})
 
 
 def iter_training(model, params, logfile, images, rd_it):
-    rd_it  = tuple(rd_it)
+    rd_it       = tuple(rd_it)
     t_it, v_it  = map(list, util.pluck(['train', 'val'], images))
-    train_epoch = ft.partial(do_epoch, train_on_minibatch, lambda e: log.log(f'Training epoch {e}:\n', start='\n'))
+    train_epoch = ft.partial(do_epoch, train_on_minibatch, lambda e: log.log(f'Training epoch {e}:\n',   start='\n'))
     eval_epoch  = ft.partial(do_epoch, eval_minibatch,     lambda e: log.log(f'Evaluating epoch {e}:\n', start='\n'))
     def train_and_evaluate_epoch(epoch):
         random.shuffle(t_it)
@@ -169,29 +170,31 @@ def iter_training(model, params, logfile, images, rd_it):
     return map(train_and_evaluate_epoch, it.count(1))
 
 
-def make_is_learning(patience, min_delta):
+def make_is_learning(patience, min_delta=0.01):
     q_losses = cl.deque(maxlen=patience + 1)
     le_delta = lambda l, r: l - r <= min_delta
-    def is_training(train_stats):
-        q_losses.append(train_stats['vloss'])
+    def is_learning(epoch_stats):
+        q_losses.append(epoch_stats['val']['loss'])
         full_queue = patience < len(q_losses)
         rest_queue = it.islice(q_losses, 1, len(q_losses))
         min_first  = all(it.starmap(le_delta, zip(it.repeat(q_losses[0]), rest_queue)))
         return not (full_queue and min_first)
-    return is_training
+    return is_learning
 
 
-def train_stats(model, logfile, epoch, tloss, vloss, tspeed, vspeed, **rest):
-    log.log(f'Epoch {epoch} ended, tloss: {tloss:.2f}, vloss: {vloss:.2f}, '
-           + f'tspeed {tspeed:.2f}, vspeed {vspeed:.2f} im/s\n\n', start='\n', file=logfile)
-    model['save_net'](epoch)
-    return {**{'epoch': epoch, 'tloss': tloss, 'vloss': vloss}, **rest}
+def on_epoch_end(model, logfile, epoch_stats):
+    t, v = util.pluck(['train', 'val'], epoch_stats)
+    f_t  = log.fmt_table([
+        ['', 'Train', 'Val'],
+        ['Avg. Loss', f'{t["loss"]:.4f}', f'{v["loss"]:.4f}'],
+    ])
+    print('', file=logfile, flush=True)
+    util.consume(map(lambda s: print(s, file=logfile, flush=True), f_t))
+    return epoch_stats
 
 
-def train(model, train_params, logfile, meta, images):
-    is_learning = make_is_learning(train_params['stopping_patience'], min_delta=0.01)
-    val_loss    = util.compose(ft.partial(util.pluck, ['loss']), ft.partial(util.pluck, ['val']))
-    training_it = iter_training(model, train_params, logfile, images, rd_it)
-    learning_it = it.takewhile(is_learning, util.take(train_params['max_epochs'], training_it))
-    return min(map(lambda d: train_stats(model, logfile, **d), learning_it), key=val_loss)
+def train(model, params, logfile, images, rd_it):
+    train_it = iter_training(model, params, logfile, images, rd_it)
+    epoch_it = it.takewhile(make_is_learning(params['patience']), util.take(params['max_epochs'], train_it))
+    return min(map(ft.partial(on_epoch_end, model, logfile), epoch_it), key=lambda e: e['val']['loss'])
 

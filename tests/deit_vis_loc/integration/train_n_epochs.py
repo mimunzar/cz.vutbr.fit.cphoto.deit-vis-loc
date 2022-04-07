@@ -16,6 +16,8 @@ def parse_args(args_it):
             required=True, metavar='DIR')
     parser.add_argument('--n-images',    help='The amount of images to sample from the Dataset',
             required=True, type=int, metavar='INT')
+    parser.add_argument('--n-epochs',    help='The number of epochs to iterate a model training',
+            required=True, type=int, metavar='INT')
     parser.add_argument('--device',      help='The device to use',
             required=False, choices=['cpu', 'cuda'], default='cuda')
     return vars(parser.parse_args(args_it))
@@ -34,7 +36,9 @@ if '__main__' == __name__:
         'margin'     : 0.2,
         'n_triplets' : 10,
         'lr'         : 1e-3,
-        'batch_size' : 16,
+        'batch_size' : 8,
+        'max_epochs' : args['n_epochs'],
+        'patience'   : args['n_epochs'],
         'positives'  : {
             'dist_m'            : 100,
             'dist_tolerance_m'  : 10,
@@ -50,5 +54,5 @@ if '__main__' == __name__:
     net    = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True).to(args['device'])
     optim  = torch.optim.AdamW(net.parameters(), params['lr'])
     model  = {'device': args['device'], 'net': net, 'optim': optim}
-    result = training.iter_training(model, params, sys.stdout, images, rd_it)
+    result = training.train(model, params, sys.stdout, images, rd_it)
 

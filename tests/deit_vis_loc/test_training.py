@@ -15,19 +15,17 @@ def test_iter_triplets():
     triplets = ft.partial(training.iter_triplets, pos_fn, neg_fn)
 
     assert list(map(set, triplets({}, []))) == []
-
-    im_it      = ['foo']
-    renders_it = ['foo_p', 'foo_n']
-    assert list(map(set, triplets(im_it, renders_it))) == [
-        {('foo', 'foo_p', 'foo_n')}
-    ]
-
-    im_it      = ['foo', 'bar']
-    renders_it = ['foo_p', 'foo_n', 'bar_p', 'bar_n']
-    assert list(map(set, triplets(im_it, renders_it))) == [
-        {('foo', 'foo_p', 'foo_n'), ('foo', 'foo_p', 'bar_p'), ('foo', 'foo_p', 'bar_n')},
-        {('bar', 'bar_p', 'bar_n'), ('bar', 'bar_p', 'foo_n'), ('bar', 'bar_p', 'foo_p')},
-    ]
+    im_it = ['foo']
+    rd_it = ['foo_p', 'foo_n']
+    assert list(map(set, triplets(im_it, rd_it))) == [
+            {('foo', 'foo_p', 'foo_n')}
+        ]
+    im_it = ['foo', 'bar']
+    rd_it = ['foo_p', 'foo_n', 'bar_p', 'bar_n']
+    assert list(map(set, triplets(im_it, rd_it))) == [
+            {('foo', 'foo_p', 'foo_n'), ('foo', 'foo_p', 'bar_p'), ('foo', 'foo_p', 'bar_n')},
+            {('bar', 'bar_p', 'bar_n'), ('bar', 'bar_p', 'foo_n'), ('bar', 'bar_p', 'foo_p')},
+        ]
 
 
 def test_triplet_loss():
@@ -49,21 +47,21 @@ def test_triplet_loss():
 
 def test_early_stopping():
     it_learning = training.make_is_learning(0, 0)
-    assert it_learning({'vloss': 0}) == False
+    assert it_learning({'val': {'loss': 0}}) == False
     #^ Not having patience means to stop immediately
 
     it_learning = training.make_is_learning(1, .1)
-    assert it_learning({'vloss': 3.00}) == True
-    assert it_learning({'vloss': 2.91}) == False
+    assert it_learning({'val': {'loss': 3.00}}) == True
+    assert it_learning({'val': {'loss': 2.91}}) == False
     #^ Validation loss doesn't decrease more than delta
 
     it_learning = training.make_is_learning(2, 0)
-    assert it_learning({'vloss': 3}) == True
-    assert it_learning({'vloss': 2}) == True
-    assert it_learning({'vloss': 1}) == True
-    assert it_learning({'vloss': 2}) == True
-    assert it_learning({'vloss': 0}) == True
-    assert it_learning({'vloss': 1}) == True
-    assert it_learning({'vloss': 2}) == False
+    assert it_learning({'val': {'loss': 3}}) == True
+    assert it_learning({'val': {'loss': 2}}) == True
+    assert it_learning({'val': {'loss': 1}}) == True
+    assert it_learning({'val': {'loss': 2}}) == True
+    assert it_learning({'val': {'loss': 0}}) == True
+    assert it_learning({'val': {'loss': 1}}) == True
+    assert it_learning({'val': {'loss': 2}}) == False
     #^ Patience over multiple losses
 

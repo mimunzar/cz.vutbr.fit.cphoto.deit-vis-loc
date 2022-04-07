@@ -17,6 +17,33 @@ def test_progress_bar():
     assert log.fmt_bar(10, 5, 5) == '[##########] 5/5'
 
 
+def test_fmt_table_col_width():
+    assert list(log.fmt_table_col_width([['f', 'fo', 'foo']])) == [1, 2, 3]
+    assert list(log.fmt_table_col_width([['foo', 'fo', 'f']])) == [3, 2, 1]
+    assert list(log.fmt_table_col_width([
+            ['foo', 'fo', 'f'],
+            ['f',   'fo', 'foo'],
+            ['fo',  'foo',''],
+        ])) == [3, 3, 3]
+
+
+def test_fmt_table():
+    assert list(log.fmt_table([['f', 'fo', 'foo']], lwidth=0)) == [' f | fo | foo |']
+    assert list(log.fmt_table([
+            ['f', 'fo', 'foo'],
+            ['foo', 'fo', 'f'],
+        ], lwidth=0)) == [
+            '  f  | fo | foo |',
+            ' foo | fo |  f  |',
+        ]
+    assert list(log.fmt_table([
+            [''    , 'Train', 'Val'],
+            ['Loss', '42.4242', '42.4242'],
+        ], lwidth=0)) == [
+            '      |  Train  |   Val   |',
+            ' Loss | 42.4242 | 42.4242 |',
+        ]
+
 def test_fmt_fraction():
     assert log.fmt_fraction(1, 1)   == '1/1'
     assert log.fmt_fraction(1, 10)  == ' 1/10'
@@ -24,15 +51,15 @@ def test_fmt_fraction():
 
 
 def test_make_progress_bar():
-    f = log.make_progress_bar(bar_width=1, total=1)
+    f = log.make_progress_bar(bar_width=1, total=1, lwidth=0)
     assert f(stage='Foo', curr=0, speed=0, loss=0) == \
-            '            Foo: [ ] 0/1  (0.00 loss, 0.00 im/s)'
+            'Foo: [ ] 0/1  (0.00 loss, 0.00 im/s)'
     assert f(stage='Foo', curr=1, speed=0.5, loss=0.5) == \
-            '            Foo: [#] 1/1  (0.50 loss, 0.50 im/s)'
+            'Foo: [#] 1/1  (0.50 loss, 0.50 im/s)'
     assert f(stage='FooFoo', curr=1, speed=0.5, loss=0.5) == \
-            '         FooFoo: [#] 1/1  (0.50 loss, 0.50 im/s)'
+            'FooFoo: [#] 1/1  (0.50 loss, 0.50 im/s)'
     assert f(stage='Foo',    curr=1, speed=1000.5, loss=1000.5) == \
-            '            Foo: [#] 1/1  (1000.50 loss, 1000.50 im/s)'
+            'Foo: [#] 1/1  (1000.50 loss, 1000.50 im/s)'
 
 
 def test_make_ims_sec():
