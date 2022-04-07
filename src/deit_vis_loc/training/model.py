@@ -156,17 +156,19 @@ def do_epoch(fn_batch_apply, fn_onstart, epoch, model, params, logfile, im_it, r
     return ft.reduce(make_epoch_stats(), it.starmap(do_minib, minib_it), {'loss': 0, 'batches': []})
 
 
-def iter_training(model, params, logfile, images, rd_it):
-    rd_it       = tuple(rd_it)
-    t_it, v_it  = map(list, util.pluck(['train', 'val'], images))
-    train_epoch = ft.partial(do_epoch, train_on_minibatch, lambda e: log.log(f'Training epoch {e}:\n',   start='\n'))
-    eval_epoch  = ft.partial(do_epoch, eval_minibatch,     lambda e: log.log(f'Evaluating epoch {e}:\n', start='\n'))
-    def train_and_evaluate_epoch(epoch):
+def iter_training(model, params, logfile, images):
+    rd_it       = tuple(images['renders'])
+    t_it, v_it  = map(list,  util.pluck(['train', 'val'], images))
+    train_epoch = ft.partial(do_epoch, train_on_minibatch,
+            lambda e: log.log(f'Training epoch {e}:\n', start='' if 1 == e else '\n', file=logfile))
+    eval_epoch  = ft.partial(do_epoch, eval_minibatch,
+            lambda e: log.log(f'Evaluating epoch {e}:\n', start='\n', file=logfile))
+    def train_and_evaluate_epoch(e):
         random.shuffle(t_it)
         random.shuffle(v_it)
-        t = train_epoch(epoch, model, params, logfile, t_it, rd_it)
-        v = eval_epoch (epoch, model, params, logfile, v_it, rd_it)
-        return {'train': t, 'val': v}
+        t = train_epoch(e, model, params, logfile, t_it, rd_it)
+        v = eval_epoch (e, model, params, logfile, v_it, rd_it)
+        return {'epoch': e, 'train': t, 'val': v}
     return map(train_and_evaluate_epoch, it.count(1))
 
 
@@ -182,7 +184,7 @@ def make_is_learning(patience, min_delta=0.01):
     return is_learning
 
 
-def on_epoch_end(model, logfile, epoch_stats):
+def on_epoch_end(logfile, model, epoch_stats):
     t, v = util.pluck(['train', 'val'], epoch_stats)
     f_t  = log.fmt_table([
         ['', 'Train', 'Val'],
@@ -193,8 +195,8 @@ def on_epoch_end(model, logfile, epoch_stats):
     return epoch_stats
 
 
-def train(model, params, logfile, images, rd_it):
-    train_it = iter_training(model, params, logfile, images, rd_it)
+def train(logfile, params, model, images):
+    train_it = iter_training(model, params, logfile, images)
     epoch_it = it.takewhile(make_is_learning(params['patience']), util.take(params['max_epochs'], train_it))
-    return min(map(ft.partial(on_epoch_end, model, logfile), epoch_it), key=lambda e: e['val']['loss'])
+    return min(map(ft.partial(on_epoch_end, logfile, model), epoch_it), key=lambda e: e['val']['loss'])
 

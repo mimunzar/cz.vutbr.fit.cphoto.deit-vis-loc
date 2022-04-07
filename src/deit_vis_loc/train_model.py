@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import functools as fp
 import json
 import os
 import sys
@@ -16,23 +15,23 @@ import torch.multiprocessing.spawn
 import torch.nn.parallel
 import torch.optim
 
-import src.deit_vis_loc.data      as data
-import src.deit_vis_loc.training.model  as model
+import src.deit_vis_loc.preprocessing.load_data as load_data
+import src.deit_vis_loc.training.model as model
+import src.deit_vis_loc.training.config as config
+import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.util as util
 
 
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--metafile',     help='The path to file containing image metadata',
-            required=True, metavar='FILE')
     parser.add_argument('--dataset-dir',  help='The path to dataset of rendered segments',
             required=True, metavar='DIR')
+    parser.add_argument('--n-images',     help='The number of images in input datasets',
+            required=False, type=int, default=None, metavar='NUM')
     parser.add_argument('--train-params', help='The path to file containing training parameters',
             required=True, metavar='FILE')
     parser.add_argument('--output-dir',   help='The path to directory where results are saved',
             required=True, metavar='DIR')
-    parser.add_argument('--dataset-size', help='The number of images in input datasets',
-            required=False, type=int, default=None, metavar='NUM')
     parser.add_argument('--device',       help='The device to use',
             required=False, choices=['cpu', 'cuda'], default='cuda')
     parser.add_argument('--workers',      help='The number of workers to spawn',
@@ -56,44 +55,44 @@ def allocate_network_for_process_on_cpu(net):
     return (net, device)
 
 
-def allocate_network_for_process(net, pid, device):
+def allocate_network_for_process(pid, net, device, **_):
     if 'cuda' == device:
         return allocate_network_for_process_on_gpu(net, pid)
     return allocate_network_for_process_on_cpu(net)
 
 
-def init_process(pid, nprocs, device):
+def init_process(pid, nprocs, device, **_):
     backend = 'nccl' if device.startswith('cuda') else 'gloo'
     torch.distributed.init_process_group(backend, rank=pid, world_size=nprocs)
 
 
-def device_name(device):
+def device_name(device, **_):
     return torch.cuda.get_device_name(device) if 'cuda' == device else 'CPU'
 
 
-def make_save_net(net, fileprefix, output_dir):
+def make_save_net(net, prefix, output_dir, **_):
     def save_net(epoch):
         epoch_str = str(epoch).zfill(3)
-        torch.save(net.module, os.path.join(output_dir, f'{fileprefix}-{epoch_str}.torch'))
+        torch.save(net.module, os.path.join(output_dir, f'{prefix}-{epoch_str}.torch'))
     return save_net
 
 
-def training_process(train_params, meta, pid, procinit):
-    init_process(pid, procinit['nprocs'], procinit['device'])
-    net, device  = allocate_network_for_process(procinit['net'], pid, procinit['device'])
-    prefix, odir = util.pluck(['fileprefix', 'output_dir'], procinit)
-    model        = {
-        'net'       : net,
-        'device'    : device,
-        'optimizer' : torch.optim.SGD(net.parameters(), train_params['learning_rate'], momentum=0.9),
-        'save_net'  : make_save_net(net, prefix, odir) if 0 == pid else lambda *_: None,
-    }
-    images = {'train': util.nth(pid, procinit['train_parts_it']), 'val': procinit['val_im_it']}
-
-    with open(os.path.join(odir, f'{prefix}-{pid}.log'), 'w') as logfile:
-        util.log(f'Started training on "{device_name(device)}"\n\n', file=logfile)
-        result = model.train(model, train_params, logfile, meta, images)
-        util.log(f'Training ended with the best net in epoch {result["epoch"]}', start='\n', file=logfile)
+def training(pid, init):
+    init_process(pid, **init)
+    net, device  = allocate_network_for_process(pid, **init)
+    with open(os.path.join(init['output_dir'], f'{init["prefix"]}-{pid}.log'), 'w') as logfile:
+        log.log(f'Started training process "{os.getpid()}" on "{device_name(**init)}"', file=logfile)
+        result = model.train(logfile, init['params'], {
+                'net'      : net,
+                'device'   : device,
+                'optim'    : torch.optim.SGD(net.parameters(), init['params']['lr'], momentum=0.9),
+                'save_net' : make_save_net(**init) if 0 == pid else lambda *_: None,
+            }, {
+                'train'   : util.nth(pid, init['im_batch_it']),
+                'val'     : init['val_it'],
+                'renders' : init['renders_it'],
+            })
+        log.log(f'Training ended with the best epoch {result["epoch"]}', start='\n', file=logfile)
         return result
 
 
@@ -103,40 +102,42 @@ def params_to_fileprefix(epoch_secs, train_params):
     return f'{timestr}-{net}-{batch_size}'
 
 
-def shell_cmd(args_it):
-    return subprocess.check_output(args_it, encoding='utf-8')
+def nvidia_cmd(query):
+    return subprocess.check_output(['nvidia-smi', query, '--format=noheader,csv'], encoding='utf-8')
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
+
     if args['sge'] and 'cuda' == args['device']:
-        devices      = set(shell_cmd(['nvidia-smi', '--query-gpu=gpu_uuid', '--format=noheader,csv']).split('\n'))
-        busy_devices = set(shell_cmd(['nvidia-smi', '--query-compute-apps=gpu_uuid', '--format=noheader,csv']).split('\n'))
+        devices      = set(nvidia_cmd('--query-gpu=gpu_uuid').split('\n'))
+        busy_devices = set(nvidia_cmd('--query-compute-apps=gpu_uuid').split('\n'))
         os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(devices - busy_devices)
+
     if 'cuda' == args['device']:
         assert args['workers'] <= torch.cuda.device_count(), 'Not enough GPUs'
 
-    train_params = data.read_train_params(args['train_params'])
-    meta         = data.read_metafile(args['metafile'])
-    worker       = fp.partial(training_process, train_params, meta)
+    with open(args['train_params'], 'r') as f:
+        params = config.parse(json.load(f))
 
-    train_im_it = set(util.take(args['dataset_size'], data.read_ims(args['dataset_dir'], 'train.txt')))
-    fileprefix  = params_to_fileprefix(util.epoch_secs(), train_params)
-    procinit    = {
-        'nprocs'         : args['workers'],
-        'output_dir'     : args['output_dir'],
-        'fileprefix'     : fileprefix,
-        'net'            : torch.hub.load('facebookresearch/deit:main', train_params['deit_model'], pretrained=True),
-        'device'         : args['device'],
-        'val_im_it'      : set(util.take(args['dataset_size'], data.read_ims(args['dataset_dir'],'val.txt'))),
-        'train_parts_it' : tuple(util.partition(len(train_im_it)//args['workers'], train_im_it))
-    }
+    prefix = params_to_fileprefix(util.epoch_secs(), params)
+    im_it  = tuple(util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'train.bin')))
 
     os.makedirs(args['output_dir'], exist_ok=True)
-    with open(os.path.join(args['output_dir'], f'{fileprefix}.json'), 'w') as f:
-        json.dump(train_params, f, indent=4)
+    with open(os.path.join(args['output_dir'], f'{prefix}.json'), 'w') as f:
+        json.dump(params, f, indent=4)
 
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '29501'
-    torch.multiprocessing.spawn(worker, nprocs=procinit['nprocs'], args=(procinit,))
+    torch.multiprocessing.spawn(training, nprocs=args['workers'], args=({
+            'nprocs'      : args['workers'],
+            'output_dir'  : args['output_dir'],
+            'prefix'      : prefix,
+            'net'         : torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True),
+            'device'      : args['device'],
+            'params'      : params,
+            'val_it'      : list(util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'val.bin'))),
+            'im_batch_it' : tuple(util.partition(len(im_it)//args['workers'], im_it)),
+            'renders_it'  : tuple(load_data.iter_im_data(args['dataset_dir'], 'renders.bin')),
+        },))
 

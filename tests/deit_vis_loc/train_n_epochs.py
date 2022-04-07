@@ -25,11 +25,6 @@ def parse_args(args_it):
 
 if '__main__' == __name__:
     args   = parse_args(sys.argv[1:])
-    images =  {
-        'train' : util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'train.bin')),
-        'val'   : util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'val.bin')),
-    }
-    rd_it  = load_data.iter_im_data(args['dataset_dir'], 'renders.bin')
     params = {
         'deit_model' : 'deit_tiny_patch16_224',
         'input_size' : 224,
@@ -50,12 +45,15 @@ if '__main__' == __name__:
             'dist_tol_m' : 10,
         }
     }
-
     net    = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True).to(args['device'])
     optim  = torch.optim.AdamW(net.parameters(), params['lr'])
-    result = model.train({
+    result = model.train(sys.stdout, params, {
             'device' : args['device'],
             'net'    : net,
             'optim'  : optim,
-        }, params, sys.stdout, images, rd_it)
+        }, {
+            'train'   : util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'train.bin')),
+            'val'     : util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'val.bin')),
+            'renders' : load_data.iter_im_data(args['dataset_dir'], 'renders.bin'),
+        })
 

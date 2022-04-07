@@ -6,10 +6,10 @@ import src.deit_vis_loc.libs.util as util
 
 
 IS_NUM      = lambda x: isinstance(x, (int, float))
+IS_INT      = lambda n: isinstance(n, int)
 IS_DICT     = lambda x: isinstance(x, dict)
 IS_NONBLANK = lambda x: isinstance(x, str) and x.strip()
 IS_POS      = lambda n: IS_NUM(n) and 0 < n
-IS_INT      = lambda n: isinstance(n, int)
 IS_POS_INT  = lambda n: IS_INT(n) and 0 < n
 IS_MISSING  = lambda p, k: k not in p
 
