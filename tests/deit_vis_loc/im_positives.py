@@ -54,9 +54,9 @@ if '__main__' == __name__:
     args   = parse_args(sys.argv[1:])
     pos_it = tuple(iter_positives({
             'dist_m'            : 100,
-            'dist_tolerance_m'  : 0,
+            'dist_tol_m'  : 0,
             'yaw_deg'           : 15,
-            'yaw_tolerance_deg' : 1,
+            'yaw_tol_deg' : 1,
         },
         load_data.iter_im_data(args['dataset_dir'], 'train.bin'),
         load_data.iter_im_data(args['dataset_dir'], 'renders.bin')))

@@ -44,7 +44,7 @@ items:
         "margin"            : 0.2,
         "learning_rate"     : 0.0001,
         "stopping_patience" : 5,
-        "yaw_tolerance_deg" : 15
+        "yaw_tol_deg" : 15
     }
 
 
@@ -64,7 +64,7 @@ Usage for Model Evaluation [TODO]
         --segments_dataset  <PATH> \
         --queries_meta      <PATH> \
         --model             <PATH> \
-        --yaw_tolerance_deg <INT>  \
+        --yaw_tol_deg <INT>  \
         --input_size        <INT>
 
 

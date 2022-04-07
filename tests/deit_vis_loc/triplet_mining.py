@@ -52,13 +52,13 @@ if '__main__' == __name__:
         'n_triplets' : 5,
         'positives'  : {
             'dist_m'            : 100,
-            'dist_tolerance_m'  : 10,
+            'dist_tol_m'  : 10,
             'yaw_deg'           : 15,
-            'yaw_tolerance_deg' : 1,
+            'yaw_tol_deg' : 1,
         },
         'negatives'  : {
             'dist_m'           : 200,
-            'dist_tolerance_m' : 10,
+            'dist_tol_m' : 10,
         }
     }
 

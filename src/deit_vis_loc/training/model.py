@@ -30,15 +30,15 @@ def is_yaw_close(fn_circle_dist_rad, limit_rad, tol_rad, im, render):
 
 
 def iter_pos_renders(params, im, rd_it):
-    d, d_tol  = util.pluck(['dist_m', 'dist_tolerance_m'], params)
-    y, y_tol  = map(ma.radians, util.pluck(['yaw_deg','yaw_tolerance_deg'], params))
+    d, d_tol  = util.pluck(['dist_m', 'dist_tol_m'], params)
+    y, y_tol  = map(ma.radians, util.pluck(['yaw_deg','yaw_tol_deg'], params))
     is_d_near = ft.partial(is_dist_close, spherical.dist_m, d, d_tol, im)
     is_y_near = ft.partial(is_yaw_close, spherical.circle_dist_rad, y, y_tol, im)
     return filter(is_d_near, filter(is_y_near, rd_it))
 
 
 def iter_neg_renders(params, im, rd_it):
-    d, d_tol  = util.pluck(['dist_m', 'dist_tolerance_m'], params)
+    d, d_tol  = util.pluck(['dist_m', 'dist_tol_m'], params)
     is_d_near = ft.partial(is_dist_close, spherical.dist_m, d, d_tol, im)
     return filter(util.complement(is_d_near), rd_it)
 
