@@ -17,7 +17,7 @@ import torch.nn.parallel
 import torch.optim
 
 import src.deit_vis_loc.data      as data
-import src.deit_vis_loc.training  as training
+import src.deit_vis_loc.training.model  as model
 import src.deit_vis_loc.libs.util as util
 
 
@@ -92,7 +92,7 @@ def training_process(train_params, meta, pid, procinit):
 
     with open(os.path.join(odir, f'{prefix}-{pid}.log'), 'w') as logfile:
         util.log(f'Started training on "{device_name(device)}"\n\n', file=logfile)
-        result = training.train(model, train_params, logfile, meta, images)
+        result = model.train(model, train_params, logfile, meta, images)
         util.log(f'Training ended with the best net in epoch {result["epoch"]}', start='\n', file=logfile)
         return result
 

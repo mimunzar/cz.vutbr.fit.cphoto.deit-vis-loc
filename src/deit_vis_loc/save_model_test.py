@@ -7,8 +7,7 @@ import os
 
 import torch
 
-import src.deit_vis_loc.data      as data
-import src.deit_vis_loc.training  as training
+import src.deit_vis_loc.training.model  as model
 import src.deit_vis_loc.libs.util as util
 
 
@@ -47,7 +46,7 @@ if __name__ == "__main__":
     with open(os.path.join(args['output_dir'], f'{fileprefix}.bin'), 'wb') as f:
         pickle.dump(len(test_im_it), f)
         print(f'{formatter("Test", 0, 0)}', end='\r', flush=True)
-        for i, im_score in enumerate(training.test(model, train_params, meta, test_im_it), start=1):
+        for i, im_score in enumerate(model.test(model, train_params, meta, test_im_it), start=1):
             pickle.dump(im_score, f)
             print(f'{formatter("Test", i, avg_ims_sec(1))}', end='\r', flush=True)
 

@@ -7,7 +7,7 @@ import torch.hub
 import torch.optim
 
 import src.deit_vis_loc.preprocessing.load_data as load_data
-import src.deit_vis_loc.training as training
+import src.deit_vis_loc.training.model as model
 
 
 def parse_args(args_it):
@@ -46,6 +46,6 @@ if '__main__' == __name__:
 
     net    = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True).to(args['device'])
     optim  = torch.optim.AdamW(net.parameters(), params['lr'])
-    result = training.train_on_minibatch({'device': args['device'], 'net': net, 'optim': optim},
+    result = model.train_on_minibatch({'device': args['device'], 'net': net, 'optim': optim},
             params, sys.stdout, rd_it, 1, 1, random.sample(tuple(im_it), k=params['batch_size']))
 
