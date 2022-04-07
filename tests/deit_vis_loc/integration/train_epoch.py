@@ -47,6 +47,6 @@ if '__main__' == __name__:
     net    = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True).to(args['device'])
     optim  = torch.optim.AdamW(net.parameters(), params['lr'])
     model  = {'device': args['device'], 'net': net, 'optim': optim}
-    result = training.do_epoch(training.train_on_minibatch,
+    result = training.do_epoch(training.train_on_minibatch, lambda *_: None, 1,
             model, params, sys.stdout, random.sample(tuple(im_it), k=args['n_images']), rd_it)
 
