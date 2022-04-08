@@ -28,18 +28,18 @@ if '__main__' == __name__:
     params = {
         'deit_model' : 'deit_tiny_patch16_224',
         'input_size' : 224,
-        'margin'     : 0.2,
+        'margin'     : 1e-2,
         'n_triplets' : 10,
         'lr'         : 1e-3,
         'batch_size' : 16,
         'positives'  : {
-            'dist_m'            : 100,
+            'dist_m'      : 100,
             'dist_tol_m'  : 10,
-            'yaw_deg'           : 15,
+            'yaw_deg'     : 15,
             'yaw_tol_deg' : 1,
         },
         'negatives'  : {
-            'dist_m'           : 200,
+            'dist_m'     : 200,
             'dist_tol_m' : 10,
         }
     }

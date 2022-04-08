@@ -70,10 +70,10 @@ def device_name(device, **_):
     return torch.cuda.get_device_name(device) if 'cuda' == device else 'CPU'
 
 
-def make_save_net(net, prefix, output_dir, **_):
-    def save_net(epoch):
-        epoch_str = str(epoch).zfill(3)
-        torch.save(net.module, os.path.join(output_dir, f'{prefix}-{epoch_str}.torch'))
+def make_save_net(nn, prefix, output_dir, **_):
+    def save_net(stats):
+        epoch_str = str(stats['epoch']).zfill(3)
+        torch.save(nn.module, os.path.join(output_dir, f'{prefix}-{epoch_str}.torch'))
     return save_net
 
 
@@ -86,12 +86,13 @@ def training(pid, init):
                 'net'      : net,
                 'device'   : device,
                 'optim'    : torch.optim.SGD(net.parameters(), init['params']['lr'], momentum=0.9),
-                'save_net' : make_save_net(**init) if 0 == pid else lambda *_: None,
             }, {
                 'train'   : util.nth(pid, init['im_batch_it']),
                 'val'     : init['val_it'],
                 'renders' : init['renders_it'],
-            })
+            }, [
+                make_save_net(net, **init) if 0 == pid else lambda *_: None,
+            ])
         log.log(f'Training ended with the best epoch {result["epoch"]}', start='\n', file=logfile)
         return result
 

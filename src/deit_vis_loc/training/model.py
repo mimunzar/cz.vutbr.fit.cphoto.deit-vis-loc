@@ -59,11 +59,11 @@ def mining_stats(acc, mining_stats):
 
 
 def iter_mined_triplets(n, fn_iter_tps, fn_tp_loss, im_it, rd_it):
-    prepend_loss = lambda x: (float(fn_tp_loss(*x[1])), *x)
+    prepend_loss = lambda i, t: (float(fn_tp_loss(*t)), i, t)
     def choose_hard(tps_it):
         with torch.no_grad():
-            samp_it = enumerate(util.rand_sample(0.1, tps_it), 1)
-            hard_it = util.take(n, filter(util.first, map(prepend_loss, samp_it)))
+            samp_it = zip(it.count(1), util.rand_sample(0.1, tps_it))
+            hard_it = util.take(n, filter(util.first, it.starmap(prepend_loss, samp_it)))
             return ft.reduce(mining_stats, hard_it, {'samples': 0, 'triplets': []})
     return map(choose_hard, fn_iter_tps(im_it, rd_it))
 
@@ -75,7 +75,7 @@ def triplet_loss(margin, fn_fwd, anchor, pos, neg):
     return torch.clamp(a_p_dis - a_n_dis + margin, min=0)
 
 
-def iter_triplet_loss(fn_fwd, params, im_it, rd_it):
+def iter_im_loss(fn_fwd, params, im_it, rd_it):
     loss     = ft.partial(triplet_loss, params['margin'], fn_fwd)
     mined_it = iter_mined_triplets(params['n_triplets'],
         ft.partial(iter_triplets,
@@ -114,7 +114,7 @@ def minibatch_stats(model, params, logfile, rd_it, batches_total, batch_id, im_i
     im_it = tuple(im_it)
     zero  = torch.zeros(1, device=model['device'], requires_grad=torch.is_grad_enabled())
     fwd   = util.compose(model['net'], make_load_im(model['device'], params['input_size']))
-    ls_it = enumerate(iter_triplet_loss(util.memoize(fwd), params, im_it, rd_it), 1)
+    ls_it = enumerate(iter_im_loss(util.memoize(fwd), params, im_it, rd_it), 1)
     stats = make_minibatch_stats(f'Batch {log.fmt_fraction(batch_id, batches_total)}', logfile, im_it)
     return ft.reduce(stats, ls_it, {'loss': zero, 'speed': 0, 'samples': []})
 
@@ -186,18 +186,19 @@ def make_is_learning(patience, min_delta=0.01):
     return is_learning
 
 
-def on_epoch_end(logfile, model, stats):
+def on_epoch_end(logfile, callbacks_it, stats):
     print('', file=logfile, flush=True)
     util.consume(map(lambda s: print(s, file=logfile, flush=True), log.fmt_table([
         ['',             'Train',                            'Val'],
         ['Avg. Loss',    f'{stats["train"]["loss"]:.4f}',    f'{stats["val"]["loss"]:.4f}'],
         ['Avg. Samples', f'{stats["train"]["samples"]:.4f}', f'{stats["val"]["samples"]:.4f}'],
     ])))
+    util.consume(map(lambda f: f(stats), callbacks_it))
     return stats
 
 
-def train(logfile, params, model, images):
+def train(logfile, params, model, images, callbacks_it):
     train_it = iter_training(model, params, logfile, images)
     epoch_it = it.takewhile(make_is_learning(params['patience']), util.take(params['max_epochs'], train_it))
-    return min(map(ft.partial(on_epoch_end, logfile, model), epoch_it), key=lambda e: e['val']['loss'])
+    return min(map(ft.partial(on_epoch_end, logfile, callbacks_it), epoch_it), key=lambda e: e['val']['loss'])
 

@@ -28,20 +28,20 @@ if '__main__' == __name__:
     params = {
         'deit_model' : 'deit_tiny_patch16_224',
         'input_size' : 224,
-        'margin'     : 0.2,
+        'margin'     : 0.1,
         'n_triplets' : 10,
         'lr'         : 1e-3,
         'batch_size' : 8,
         'max_epochs' : args['n_epochs'],
         'patience'   : args['n_epochs'],
         'positives'  : {
-            'dist_m'            : 100,
+            'dist_m'      : 100,
             'dist_tol_m'  : 10,
-            'yaw_deg'           : 15,
+            'yaw_deg'     : 15,
             'yaw_tol_deg' : 1,
         },
         'negatives'  : {
-            'dist_m'           : 200,
+            'dist_m'     : 200,
             'dist_tol_m' : 10,
         }
     }
@@ -55,5 +55,5 @@ if '__main__' == __name__:
             'train'   : util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'train.bin')),
             'val'     : util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'val.bin')),
             'renders' : load_data.iter_im_data(args['dataset_dir'], 'renders.bin'),
-        })
+        }, [])
 
