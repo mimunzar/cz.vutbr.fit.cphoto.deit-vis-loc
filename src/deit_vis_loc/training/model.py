@@ -141,9 +141,11 @@ def eval_minibatch(model, *args):
 
 def make_epoch_stats():
     ravg_loss = util.make_running_avg()
-    def epoch_stats(acc, batch_stats):
-        util.update('loss',    lambda _: ravg_loss(batch_stats['loss']), acc)
-        util.update('batches', lambda b: [*b, batch_stats], acc)
+    ravg_samp = util.make_running_avg()
+    def epoch_stats(acc, stats):
+        util.update('loss',    lambda _: ravg_loss(stats['loss']), acc)
+        util.update('samples', lambda _: ravg_samp(stats['samples']), acc)
+        util.update('batches', lambda b: [*b, stats], acc)
         return acc
     return epoch_stats
 
@@ -153,7 +155,7 @@ def do_epoch(fn_batch_apply, fn_onstart, epoch, model, params, logfile, im_it, r
     rd_it    = tuple(rd_it)
     minib_it = tuple(enumerate(util.partition(params['batch_size'], im_it), 1))
     do_minib = ft.partial(fn_batch_apply, model, params, logfile, rd_it, len(minib_it))
-    return ft.reduce(make_epoch_stats(), it.starmap(do_minib, minib_it), {'loss': 0, 'batches': []})
+    return ft.reduce(make_epoch_stats(), it.starmap(do_minib, minib_it), {'samples': 0, 'loss': 0, 'batches': []})
 
 
 def iter_training(model, params, logfile, images):
@@ -184,15 +186,14 @@ def make_is_learning(patience, min_delta=0.01):
     return is_learning
 
 
-def on_epoch_end(logfile, model, epoch_stats):
-    t, v = util.pluck(['train', 'val'], epoch_stats)
-    f_t  = log.fmt_table([
-        ['', 'Train', 'Val'],
-        ['Avg. Loss', f'{t["loss"]:.4f}', f'{v["loss"]:.4f}'],
-    ])
+def on_epoch_end(logfile, model, stats):
     print('', file=logfile, flush=True)
-    util.consume(map(lambda s: print(s, file=logfile, flush=True), f_t))
-    return epoch_stats
+    util.consume(map(lambda s: print(s, file=logfile, flush=True), log.fmt_table([
+        ['',             'Train',                            'Val'],
+        ['Avg. Loss',    f'{stats["train"]["loss"]:.4f}',    f'{stats["val"]["loss"]:.4f}'],
+        ['Avg. Samples', f'{stats["train"]["samples"]:.4f}', f'{stats["val"]["samples"]:.4f}'],
+    ])))
+    return stats
 
 
 def train(logfile, params, model, images):

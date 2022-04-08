@@ -28,20 +28,22 @@ def test_fmt_table_col_width():
 
 
 def test_fmt_table():
-    assert list(log.fmt_table([['f', 'fo', 'foo']], lwidth=0)) == [' f | fo | foo |']
+    assert list(log.fmt_table([['f', 'fo', 'foo']], lwidth=0)) == ['f | fo | foo |']
     assert list(log.fmt_table([
             ['f', 'fo', 'foo'],
             ['foo', 'fo', 'f'],
         ], lwidth=0)) == [
-            '  f  | fo | foo |',
-            ' foo | fo |  f  |',
+            'f   | fo | foo |',
+            'foo | fo |  f  |',
         ]
     assert list(log.fmt_table([
-            [''    , 'Train', 'Val'],
-            ['Loss', '42.4242', '42.4242'],
+            [''    ,    'Train',   'Val'],
+            ['Loss',    '42.4242', '42.4242'],
+            ['Samples', '42.4242', '42.4242'],
         ], lwidth=0)) == [
-            '      |  Train  |   Val   |',
-            ' Loss | 42.4242 | 42.4242 |',
+            '        |  Train  |   Val   |',
+            'Loss    | 42.4242 | 42.4242 |',
+            'Samples | 42.4242 | 42.4242 |',
         ]
 
 def test_fmt_fraction():

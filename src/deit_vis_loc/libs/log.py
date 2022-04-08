@@ -3,7 +3,6 @@
 import functools as ft
 import itertools as it
 import datetime as dt
-import operator as op
 import sys
 import time
 
@@ -25,9 +24,9 @@ def fmt_table_col_width(t):
 
 
 def fmt_table(t, lwidth=LINE_WIDTH):
-    col_width = tuple(map(ft.partial(op.add, 2), fmt_table_col_width(t)))
-    fmt_cell  = lambda s, c: f'{s:^{c}}|'
-    fmt_row   = lambda r_it: it.starmap(fmt_cell, zip(r_it, col_width))
+    col_width = tuple(fmt_table_col_width(t))
+    fmt_cell  = lambda c, s, w: f'{s:<{w}} |' if 0 == c else f' {s:^{w}} |'
+    fmt_row   = lambda r_it: it.starmap(fmt_cell, zip(it.count(), r_it, col_width))
     return map(util.compose(lambda r: ''.join(r).center(lwidth), fmt_row), t)
 
 
