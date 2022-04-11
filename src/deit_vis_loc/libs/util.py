@@ -9,9 +9,7 @@ import time
 
 
 def partition(n, iterable):
-    iterable = iter(iterable)
-    return it.takewhile(lambda l: len(l) == n,
-            (tuple(take(n, iterable)) for _ in it.repeat(None)))
+    return zip(*[iter(iterable)]*n)
 
 
 def partition_by(pred, iterable):

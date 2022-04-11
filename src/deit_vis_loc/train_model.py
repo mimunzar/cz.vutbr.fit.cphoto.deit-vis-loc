@@ -16,8 +16,9 @@ import torch.nn.parallel
 import torch.optim
 
 import src.deit_vis_loc.preprocessing.load_data as load_data
-import src.deit_vis_loc.training.model as model
+import src.deit_vis_loc.training.callbacks as callbacks
 import src.deit_vis_loc.training.config as config
+import src.deit_vis_loc.training.model as model
 import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.util as util
 
@@ -70,13 +71,6 @@ def device_name(device, **_):
     return torch.cuda.get_device_name(device) if 'cuda' == device else 'CPU'
 
 
-def make_save_net(nn, prefix, output_dir, **_):
-    def save_net(stats):
-        epoch_str = str(stats['epoch']).zfill(3)
-        torch.save(nn.module, os.path.join(output_dir, f'{prefix}-{epoch_str}.torch'))
-    return save_net
-
-
 def training(pid, init):
     init_process(pid, **init)
     net, device  = allocate_network_for_process(pid, **init)
@@ -91,8 +85,11 @@ def training(pid, init):
                 'val'     : init['val_it'],
                 'renders' : init['renders_it'],
             }, [
-                make_save_net(net, **init) if 0 == pid else lambda *_: None,
-            ])
+                callbacks.make_save_net(net, **init),
+                callbacks.make_plot_batch_loss(**init),
+                callbacks.make_plot_epoch_loss(**init),
+                callbacks.make_plot_epoch_samples(**init),
+            ] if 0 == pid else [])
         log.log(f'Training ended with the best epoch {result["epoch"]}', start='\n', file=logfile)
         return result
 

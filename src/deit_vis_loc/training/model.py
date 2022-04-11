@@ -76,12 +76,12 @@ def triplet_loss(margin, fn_fwd, anchor, pos, neg):
 
 
 def iter_im_loss(fn_fwd, params, im_it, rd_it):
-    loss     = ft.partial(triplet_loss, params['margin'], fn_fwd)
-    mined_it = iter_mined_triplets(params['n_triplets'],
+    loss  = ft.partial(triplet_loss, params['margin'], fn_fwd)
+    tp_it = iter_mined_triplets(params['n_triplets'],
         ft.partial(iter_triplets,
             ft.partial(iter_pos_renders, params['positives']),
             ft.partial(iter_neg_renders, params['negatives'])), loss, im_it, rd_it)
-    return map(lambda m: {**m, 'loss': sum(it.starmap(loss, m['triplets']))}, mined_it)
+    return map(lambda m: {**m, 'loss': sum(it.starmap(loss, m['triplets']))}, tp_it)
 
 
 def make_load_im(device, input_size):
