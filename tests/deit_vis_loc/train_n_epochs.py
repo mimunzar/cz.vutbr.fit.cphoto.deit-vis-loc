@@ -2,11 +2,11 @@
 
 import argparse
 import sys
-import torch.hub
 import torch.optim
 
 import src.deit_vis_loc.preprocessing.load_data as load_data
 import src.deit_vis_loc.libs.util as util
+import src.deit_vis_loc.training.locate as locate
 import src.deit_vis_loc.training.model as model
 
 
@@ -45,9 +45,9 @@ if '__main__' == __name__:
             'dist_tol_m' : 10,
         }
     }
-    net    = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True).to(args['device'])
+    net    = model.load(params['deit_model']).to(args['device'])
     optim  = torch.optim.AdamW(net.parameters(), params['lr'])
-    result = model.train(sys.stdout, params, {
+    result = locate.train(sys.stdout, params, {
             'device' : args['device'],
             'net'    : net,
             'optim'  : optim,

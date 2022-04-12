@@ -10,7 +10,6 @@ from datetime import datetime
 import torch
 import torch.cuda
 import torch.distributed
-import torch.hub
 import torch.multiprocessing.spawn
 import torch.nn.parallel
 import torch.optim
@@ -18,6 +17,7 @@ import torch.optim
 import src.deit_vis_loc.preprocessing.load_data as load_data
 import src.deit_vis_loc.training.callbacks as callbacks
 import src.deit_vis_loc.training.config as config
+import src.deit_vis_loc.training.locate as locate
 import src.deit_vis_loc.training.model as model
 import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.util as util
@@ -76,7 +76,7 @@ def training(pid, init):
     net, device  = allocate_network_for_process(pid, **init)
     with open(os.path.join(init['output_dir'], f'{init["prefix"]}-{pid}.log'), 'w') as logfile:
         log.log(f'Started training process "{os.getpid()}" on "{device_name(**init)}"', file=logfile)
-        result = model.train(logfile, init['params'], {
+        result = locate.train(logfile, init['params'], {
                 'net'      : net,
                 'device'   : device,
                 'optim'    : torch.optim.SGD(net.parameters(), init['params']['lr'], momentum=0.9),
@@ -131,7 +131,7 @@ if __name__ == "__main__":
             'nprocs'      : args['workers'],
             'output_dir'  : args['output_dir'],
             'prefix'      : prefix,
-            'net'         : torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True),
+            'net'         : model.load(params['deit_model']),
             'device'      : args['device'],
             'params'      : params,
             'val_it'      : list(util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'val.bin'))),

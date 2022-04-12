@@ -3,10 +3,10 @@
 import argparse
 import random
 import sys
-import torch.hub
 import torch.optim
 
 import src.deit_vis_loc.preprocessing.load_data as load_data
+import src.deit_vis_loc.training.locate as locate
 import src.deit_vis_loc.training.model as model
 
 
@@ -44,8 +44,8 @@ if '__main__' == __name__:
         }
     }
 
-    net    = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True).to(args['device'])
+    net    = model.load(params['deit_model']).to(args['device'])
     optim  = torch.optim.AdamW(net.parameters(), params['lr'])
-    result = model.train_on_minibatch({'device': args['device'], 'net': net, 'optim': optim},
+    result = locate.train_on_minibatch({'device': args['device'], 'net': net, 'optim': optim},
             params, sys.stdout, rd_it, 1, 1, random.sample(tuple(im_it), k=params['batch_size']))
 

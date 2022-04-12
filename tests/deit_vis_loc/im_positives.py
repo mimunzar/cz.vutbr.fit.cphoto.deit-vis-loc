@@ -12,7 +12,7 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as mpplt
 
 import src.deit_vis_loc.preprocessing.load_data as load_data
-import src.deit_vis_loc.training.model as model
+import src.deit_vis_loc.training.locate as locate
 import src.deit_vis_loc.libs.util as util
 
 
@@ -25,7 +25,7 @@ def parse_args(args_it):
 
 def iter_positives(train_params, im_it, renders_it):
     renders_it = tuple(renders_it)
-    positives  = lambda im: model.iter_pos_renders(train_params, im, renders_it)
+    positives  = lambda im: locate.iter_pos_renders(train_params, im, renders_it)
     return map(lambda im: (im, positives(im)), im_it)
 
 

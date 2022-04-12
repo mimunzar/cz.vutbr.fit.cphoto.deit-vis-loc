@@ -8,9 +8,9 @@ import sys
 
 import matplotlib.image as mpimg
 import matplotlib.pyplot as mpplt
-import torch.hub
 
 import src.deit_vis_loc.preprocessing.load_data as load_data
+import src.deit_vis_loc.training.locate as locate
 import src.deit_vis_loc.training.model as model
 import src.deit_vis_loc.libs.util as util
 
@@ -62,16 +62,14 @@ if '__main__' == __name__:
         }
     }
 
-    net = torch.hub.load('facebookresearch/deit:main', params['deit_model'], pretrained=True)
-    net.to(args['device'])
-
-    transform = model.make_load_im(args['device'], params['input_size'])
+    net       = model.load(params['deit_model']).to(args['device']).to(args['device'])
+    transform = locate.make_load_im(args['device'], params['input_size'])
     forward   = util.compose(net, transform)
-    mined_it  = model.iter_mined_triplets(params['n_triplets'],
-        ft.partial(model.iter_triplets,
-            ft.partial(model.iter_pos_renders, params['positives']),
-            ft.partial(model.iter_neg_renders, params['negatives'])),
-        ft.partial(model.triplet_loss, params['margin'], util.memoize(forward)),
+    mined_it  = locate.iter_mined_triplets(params['n_triplets'],
+        ft.partial(locate.iter_triplets,
+            ft.partial(locate.iter_pos_renders, params['positives']),
+            ft.partial(locate.iter_neg_renders, params['negatives'])),
+        ft.partial(locate.triplet_loss, params['margin'], util.memoize(forward)),
         random.sample(tuple(im_it), k=args['n_images']),  rd_it)
     result = map(iter_plot_mined_triplets, mined_it)
 
