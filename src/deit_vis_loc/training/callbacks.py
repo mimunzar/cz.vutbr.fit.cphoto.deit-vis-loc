@@ -4,7 +4,7 @@ import functools as ft
 import os
 
 import torch
-import matplotlib.pyplot as plot
+import matplotlib.pyplot as plt
 
 import src.deit_vis_loc.libs.util as util
 
@@ -25,11 +25,12 @@ def make_plot_batch_loss(prefix, output_dir, **_):
     pluck = ft.partial(util.pluck, ['loss'])
     def plot_batch_loss(stats):
         t_it.extend(map(pluck, stats['train']['batches']))
-        fg, ax = plot.subplots()
+        fg, ax = plt.subplots()
         ax.plot(*add_xaxis(t_it), linewidth=2.5)
         ax.set_xlabel('Batch')
         ax.set_ylabel('Loss')
         fg.savefig(os.path.join(output_dir, f'{prefix}.batch-loss.svg'))
+        plt.close(fg)
         return t_it
     return plot_batch_loss
 
@@ -40,12 +41,13 @@ def make_plot_epoch_loss(prefix, output_dir, **_):
     def plot_epoch_loss(stats):
         t_it.append(util.pluck(['loss'], stats['train']))
         v_it.append(util.pluck(['loss'], stats['val']))
-        fg, ax = plot.subplots()
+        fg, ax = plt.subplots()
         ax.plot(*add_xaxis(t_it), *add_xaxis(v_it), linewidth=2.5)
         ax.set_xlabel('Epoch')
         ax.set_ylabel('Loss')
         ax.legend(['train', 'val'])
         fg.savefig(os.path.join(output_dir, f'{prefix}.epoch-loss.svg'))
+        plt.close(fg)
         return {'train': t_it, 'val': v_it}
     return plot_epoch_loss
 
@@ -56,12 +58,13 @@ def make_plot_epoch_samples(prefix, output_dir, **_):
     def plot_epoch_samples(stats):
         t_it.append(util.pluck(['samples'], stats['train']))
         v_it.append(util.pluck(['samples'], stats['val']))
-        fg, ax = plot.subplots()
+        fg, ax = plt.subplots()
         ax.plot(*add_xaxis(t_it), *add_xaxis(v_it), linewidth=2.5)
         ax.set_xlabel('Epoch')
         ax.set_ylabel('Samples')
         ax.legend(['train', 'val'])
         fg.savefig(os.path.join(output_dir, f'{prefix}.epoch-samples.svg'))
+        plt.close(fg)
         return {'train': t_it, 'val': v_it}
     return plot_epoch_samples
 
