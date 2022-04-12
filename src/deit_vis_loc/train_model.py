@@ -25,19 +25,19 @@ import src.deit_vis_loc.libs.util as util
 
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset-dir',  help='The path to dataset of rendered segments',
+    parser.add_argument('--dataset-dir', help='The path to dataset of rendered segments',
             required=True, metavar='DIR')
-    parser.add_argument('--n-images',     help='The number of images in input datasets',
+    parser.add_argument('--n-images',    help='The number of images in input datasets',
             required=False, type=int, default=None, metavar='NUM')
-    parser.add_argument('--train-params', help='The path to file containing training parameters',
+    parser.add_argument('--params',      help='The path to file containing training parameters',
             required=True, metavar='FILE')
-    parser.add_argument('--output-dir',   help='The path to directory where results are saved',
+    parser.add_argument('--output-dir',  help='The path to directory where results are saved',
             required=True, metavar='DIR')
-    parser.add_argument('--device',       help='The device to use',
+    parser.add_argument('--device',      help='The device to use',
             required=False, choices=['cpu', 'cuda'], default='cuda')
-    parser.add_argument('--workers',      help='The number of workers to spawn',
+    parser.add_argument('--workers',     help='The number of workers to spawn',
             required=False, type=int, default=1, metavar='NUM')
-    parser.add_argument('--sge',          help='When set it initializes training for SGE server',
+    parser.add_argument('--sge',         help='When set it initializes training for SGE server',
             required=False, action='store_const', const=True, default=False)
     return vars(parser.parse_args(args_it))
 
@@ -94,9 +94,9 @@ def training(pid, init):
         return result
 
 
-def params_to_fileprefix(epoch_secs, train_params):
+def params_to_fileprefix(epoch_secs, params):
     timestr         = datetime.fromtimestamp(epoch_secs).strftime('%Y%m%dT%H%M%S')
-    net, batch_size = util.pluck(['deit_model', 'batch_size'], train_params)
+    net, batch_size = util.pluck(['deit_model', 'batch_size'], params)
     return f'{timestr}-{net}-{batch_size}'
 
 
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     if 'cuda' == args['device']:
         assert args['workers'] <= torch.cuda.device_count(), 'Not enough GPUs'
 
-    with open(args['train_params'], 'r') as f:
+    with open(args['params'], 'r') as f:
         params = config.parse(json.load(f))
 
     prefix  = params_to_fileprefix(util.epoch_secs(), params)

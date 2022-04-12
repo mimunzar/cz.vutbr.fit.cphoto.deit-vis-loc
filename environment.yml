@@ -4,6 +4,7 @@ channels:
   - defaults
 dependencies:
   - cudatoolkit=11.0
+  - matplotlib
   - pip
   - python=3.6
   - pytorch==1.7.1

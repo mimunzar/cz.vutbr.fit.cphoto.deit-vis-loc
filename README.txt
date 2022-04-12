@@ -52,8 +52,7 @@ Then start trainining by executing the following command:
 
     python -m src.deit_vis_loc.train_model \
         --dataset-dir  <DIR>  \
-        --metafile     <FILE> \
-        --train-params <FILE> \
+        --params       <FILE> \
         --output-dir   <DIR>
 
 

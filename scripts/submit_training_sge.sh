@@ -22,8 +22,7 @@ train_network() {
     mkdir -p output/
     python -um src.deit_vis_loc.train_model \
         --dataset-dir  input/ \
-        --metafile     input/queries_meta.json \
-        --train-params input/train_params.json \
+        --params       input/params.json \
         --output-dir   output/ \
         --workers      ${NSLOTS} \
         --device       cuda \
