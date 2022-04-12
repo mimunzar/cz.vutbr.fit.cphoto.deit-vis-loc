@@ -51,13 +51,13 @@ if '__main__' == __name__:
         'margin'     : 0.2,
         'n_triplets' : 5,
         'positives'  : {
-            'dist_m'            : 100,
+            'dist_m'      : 100,
             'dist_tol_m'  : 10,
-            'yaw_deg'           : 15,
+            'yaw_deg'     : 15,
             'yaw_tol_deg' : 1,
         },
         'negatives'  : {
-            'dist_m'           : 200,
+            'dist_m'     : 200,
             'dist_tol_m' : 10,
         }
     }

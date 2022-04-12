@@ -118,18 +118,19 @@ if __name__ == "__main__":
     with open(args['train_params'], 'r') as f:
         params = config.parse(json.load(f))
 
-    prefix = params_to_fileprefix(util.epoch_secs(), params)
-    im_it  = tuple(util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'train.bin')))
+    prefix  = params_to_fileprefix(util.epoch_secs(), params)
+    out_dir = os.path.join(args['output_dir'], prefix)
+    im_it   = tuple(util.take(args['n_images'], load_data.iter_im_data(args['dataset_dir'], 'train.bin')))
 
-    os.makedirs(args['output_dir'], exist_ok=True)
-    with open(os.path.join(args['output_dir'], f'{prefix}.json'), 'w') as f:
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, f'{prefix}.json'), 'w') as f:
         json.dump(params, f, indent=4)
 
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '29501'
     torch.multiprocessing.spawn(training, nprocs=args['workers'], args=({
             'nprocs'      : args['workers'],
-            'output_dir'  : args['output_dir'],
+            'output_dir'  : out_dir,
             'prefix'      : prefix,
             'net'         : model.load(params['deit_model']),
             'device'      : args['device'],
