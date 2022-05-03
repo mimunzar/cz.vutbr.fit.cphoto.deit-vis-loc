@@ -8,8 +8,11 @@ import random
 import time
 
 
-def partition(n, iterable):
-    return zip(*[iter(iterable)]*n)
+def partition(n, iterable, strict=True):
+    iterable = iter(iterable)
+    if strict:
+        return zip(*[iterable]*n)
+    return iter(lambda: tuple(take(n, iterable)), ())
 
 
 def partition_by(pred, iterable):

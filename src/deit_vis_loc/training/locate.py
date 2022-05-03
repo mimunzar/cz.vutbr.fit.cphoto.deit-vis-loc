@@ -54,7 +54,11 @@ def iter_hard_pos_renders(fn_fwd, params, im, rd_it):
 
 
 def iter_hard_neg_renders(fn_fwd, params, im, rd_it):
-    pass
+    neg_it = iter_neg_renders(params, im, rd_it)
+    with torch.no_grad():
+        im_dist = ft.partial(cosine_distance, fn_fwd(im['path']))
+        hard_it = sorted(neg_it, key=lambda r: im_dist(fn_fwd(r['path'])))
+        yield from util.take(params['n_negatives'], hard_it)
 
 
 def iter_triplets(fn_iter_pos, fn_iter_neg, im_it, rd_it):

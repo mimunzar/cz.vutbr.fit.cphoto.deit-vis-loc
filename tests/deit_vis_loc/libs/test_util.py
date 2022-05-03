@@ -5,18 +5,24 @@ import src.deit_vis_loc.libs.util as util
 
 
 def test_partition():
-    assert list(util.partition(1, [])) == []
+    assert list(util.partition(1, []))        == []
     assert list(util.partition(4, [1, 2, 3])) == []
     assert list(util.partition(3, [1, 2, 3])) == [(1, 2, 3)]
     assert list(util.partition(2, [1, 2, 3])) == [(1, 2)]
     assert list(util.partition(1, [1, 2, 3])) == [(1,), (2,), (3,)]
 
+    assert list(util.partition(1, [],        strict=False)) == []
+    assert list(util.partition(4, [1, 2, 3], strict=False)) == [(1, 2, 3)]
+    assert list(util.partition(3, [1, 2, 3], strict=False)) == [(1, 2, 3)]
+    assert list(util.partition(2, [1, 2, 3], strict=False)) == [(1, 2), (3,)]
+    assert list(util.partition(1, [1, 2, 3], strict=False)) == [(1,), (2,), (3,)]
+
 
 def test_partition_by():
     is_odd = lambda x: x % 2
-    assert list(map(list, util.partition_by(is_odd, []))) == [[], []]
-    assert list(map(list, util.partition_by(is_odd, [1]))) == [[1], []]
-    assert list(map(list, util.partition_by(is_odd, [1, 2]))) == [[1], [2]]
+    assert list(map(list, util.partition_by(is_odd, [])))        == [[], []]
+    assert list(map(list, util.partition_by(is_odd, [1])))       == [[1], []]
+    assert list(map(list, util.partition_by(is_odd, [1, 2])))    == [[1], [2]]
     assert list(map(list, util.partition_by(is_odd, [1, 2, 3]))) == [[1, 3], [2]]
 
 
