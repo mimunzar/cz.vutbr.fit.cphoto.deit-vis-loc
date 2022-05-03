@@ -188,12 +188,12 @@ def make_is_learning(patience, min_delta=0.01):
 
 def on_epoch_end(logfile, callbacks_it, stats):
     print('', file=logfile, flush=True)
-    util.consume(map(lambda s: print(s, file=logfile, flush=True), log.fmt_table([
+    util.dorun(map(lambda s: print(s, file=logfile, flush=True), log.fmt_table([
         ['',             'Train',                            'Val'],
         ['Avg. Loss',    f'{stats["train"]["loss"]:.4f}',    f'{stats["val"]["loss"]:.4f}'],
         ['Avg. Samples', f'{stats["train"]["samples"]:.4f}', f'{stats["val"]["samples"]:.4f}'],
     ])))
-    util.consume(map(lambda f: f(stats), callbacks_it))
+    util.dorun(map(lambda f: f(stats), callbacks_it))
     return stats
 
 

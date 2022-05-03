@@ -38,7 +38,7 @@ def add_path(fn_render_path, im):
 def write_im_dataset(dpath, fname, im_it):
     with open(os.path.join(dpath, fname), 'wb') as f:
         saver = lambda x: pickle.dump(x, f)
-        util.consume(map(saver, im_it))
+        util.dorun(map(saver, im_it))
         saver('EOF')
 
 

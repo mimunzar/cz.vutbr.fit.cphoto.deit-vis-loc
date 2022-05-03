@@ -29,7 +29,7 @@ def drop(n, iterable):
     return it.islice(iterable, n, None)
 
 
-def consume(iterable):
+def dorun(iterable):
     cl.deque(iterable, maxlen=0)
 
 
@@ -82,8 +82,8 @@ def compose(*f):
     return ft.reduce(_compose2, f)
 
 
-def make_validator(msg, fn_valid):
-    return lambda *args: (True, None) if fn_valid(*args) else (False, msg)
+def make_validator(msg, f):
+    return lambda *args: (bool(f(*args)), msg)
 
 
 def make_checker(validators):

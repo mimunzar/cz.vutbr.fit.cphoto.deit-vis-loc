@@ -50,12 +50,12 @@ def make_progress_bar(bar_width, total, lwidth=LINE_WIDTH):
 
 def make_ims_sec(fn_epoch_secs=time.time):
     start = fn_epoch_secs()
-    def ims_sec(done_ims, fn_epoch_secs=time.time):
+    def ims_sec(n_im, fn_epoch_secs=time.time):
         nonlocal start
         end    = fn_epoch_secs()
-        result = done_ims/max(1e-6, end - start)
-        start  = start +  max(1e-6, end - start)
-        return result
+        elaps  = max(1e-6, end - start)
+        start  = start + elaps
+        return n_im/elaps
     return ims_sec
 
 

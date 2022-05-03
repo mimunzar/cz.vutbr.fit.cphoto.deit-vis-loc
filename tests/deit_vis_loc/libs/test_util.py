@@ -105,7 +105,7 @@ def test_compose():
 def test_validator():
     assert util.make_validator('Fail', lambda: False)()    == (False, 'Fail')
     assert util.make_validator('Fail', lambda x: x > 0)(0) == (False, 'Fail')
-    assert util.make_validator('Fail', lambda x: x > 0)(1) == (True, None)
+    assert util.make_validator('Fail', lambda x: x > 0)(1) == (True,  'Fail')
 
 
 def test_checker():
