@@ -19,28 +19,42 @@ import src.deit_vis_loc.libs.spherical as spherical
 
 
 
-def is_dist_close(fn_dist_m, limit_m, tol_m, im, render):
+def is_dist_close(limit_m, tol_m, im, render):
     pluck = ft.partial(util.pluck, ['latitude', 'longitude'])
-    return fn_dist_m(pluck(im), pluck(render)) - limit_m <= tol_m
+    return spherical.dist_m(pluck(im), pluck(render)) - limit_m <= tol_m
 
 
-def is_yaw_close(fn_circle_dist_rad, limit_rad, tol_rad, im, render):
+def is_yaw_close(limit_rad, tol_rad, im, render):
     pluck = ft.partial(util.pluck, ['yaw'])
-    return fn_circle_dist_rad(pluck(im), pluck(render)) - limit_rad <= tol_rad
+    return spherical.circle_dist_rad(pluck(im), pluck(render)) - limit_rad <= tol_rad
 
 
 def iter_pos_renders(params, im, rd_it):
-    d, d_tol  = util.pluck(['dist_m', 'dist_tol_m'], params)
-    y, y_tol  = map(ma.radians, util.pluck(['yaw_deg','yaw_tol_deg'], params))
-    is_d_near = ft.partial(is_dist_close, spherical.dist_m, d, d_tol, im)
-    is_y_near = ft.partial(is_yaw_close, spherical.circle_dist_rad, y, y_tol, im)
-    return filter(is_d_near, filter(is_y_near, rd_it))
+    d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
+    y, y_tol = map(ma.radians, util.pluck(['yaw_deg','yaw_tol_deg'], params))
+    return filter(ft.partial(is_dist_close, d, d_tol, im),
+            filter(ft.partial(is_yaw_close, y, y_tol, im), rd_it))
 
 
 def iter_neg_renders(params, im, rd_it):
-    d, d_tol  = util.pluck(['dist_m', 'dist_tol_m'], params)
-    is_d_near = ft.partial(is_dist_close, spherical.dist_m, d, d_tol, im)
-    return filter(util.complement(is_d_near), rd_it)
+    d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
+    return filter(util.complement(ft.partial(is_dist_close, d, d_tol, im)), rd_it)
+
+
+def cosine_distance(emb, emb_other):
+    return 1 - F.cosine_similarity(emb, emb_other)
+
+
+def iter_hard_pos_renders(fn_fwd, params, im, rd_it):
+    pos_it = iter_pos_renders(params, im, rd_it)
+    with torch.no_grad():
+        im_dist = ft.partial(cosine_distance, fn_fwd(im['path']))
+        hard_it = sorted(pos_it, reverse=True, key=lambda r: im_dist(fn_fwd(r['path'])))
+        yield from util.take(params['n_positives'], hard_it)
+
+
+def iter_hard_neg_renders(fn_fwd, params, im, rd_it):
+    pass
 
 
 def iter_triplets(fn_iter_pos, fn_iter_neg, im_it, rd_it):

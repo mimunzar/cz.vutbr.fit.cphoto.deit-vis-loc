@@ -48,7 +48,7 @@ if '__main__' == __name__:
     params = {
         'deit_model' : 'deit_tiny_patch16_224',
         'input_size' : 224,
-        'margin'     : 0.2,
+        'margin'     : 0.1,
         'n_triplets' : 5,
         'positives'  : {
             'dist_m'      : 100,
