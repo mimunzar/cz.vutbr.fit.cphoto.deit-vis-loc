@@ -6,6 +6,46 @@ import torch
 import src.deit_vis_loc.training.locate as locate
 
 
+def test_iter_apply_ims_partitionwise():
+    iter_part = ft.partial(locate.iter_apply_ims_partitionwise, lambda x: x)
+
+    assert list(map(tuple, iter_part(1, [],           [])))           == []
+    assert list(map(tuple, iter_part(1, ['i1', 'i2'], [])))           == []
+    assert list(map(tuple, iter_part(1, [],           ['r1', 'r2']))) == [(), ()]
+
+    assert list(map(tuple, iter_part(1, ['i1', 'i2'], ['r1', 'r2']))) == [
+        (('i1', ('r1',)), ('i2', ('r1',))),
+        (('i1', ('r2',)), ('i2', ('r2',))),
+    ]
+    assert list(map(tuple, iter_part(2, ['i1', 'i2'], ['r1', 'r2']))) == [
+        (('i1', ('r1', 'r2')), ('i2', ('r1', 'r2')))
+    ]
+    assert list(map(tuple, iter_part(3, ['i1', 'i2'], ['r1', 'r2']))) == [
+        (('i1', ('r1', 'r2')), ('i2', ('r1', 'r2')))
+    ]
+
+
+def test_iter_partitioned_process():
+    iter_proc = ft.partial(locate.iter_partitioned_process, lambda x: x, lambda x: x)
+
+    assert list(map(tuple, iter_proc(1, [],           [])))           == []
+    assert list(map(tuple, iter_proc(1, ['i1', 'i2'], [])))           == []
+    assert list(map(tuple, iter_proc(1, [],           ['r1', 'r2']))) == []
+
+    assert list(map(tuple, iter_proc(1, ['i1', 'i2'], ['r1', 'r2']))) == [
+        ('i1', (('i1', ('r1',)), ('i1', ('r2',)))),
+        ('i2', (('i2', ('r1',)), ('i2', ('r2',)))),
+    ]
+    assert list(map(tuple, iter_proc(2, ['i1', 'i2'], ['r1', 'r2']))) == [
+        ('i1', (('i1', ('r1', 'r2')),)),
+        ('i2', (('i2', ('r1', 'r2')),)),
+    ]
+    assert list(map(tuple, iter_proc(3, ['i1', 'i2'], ['r1', 'r2']))) == [
+        ('i1', (('i1', ('r1', 'r2')),)),
+        ('i2', (('i2', ('r1', 'r2')),)),
+    ]
+
+
 def test_iter_triplets():
     im_pos   = lambda im, render: render == f'{im}_p'
     im_neg   = lambda im, render: render != f'{im}_p'
@@ -13,35 +53,48 @@ def test_iter_triplets():
     neg_fn   = lambda im, renders_it: filter(ft.partial(im_neg, im), renders_it)
     triplets = ft.partial(locate.iter_triplets, pos_fn, neg_fn)
 
-    assert list(map(set, triplets({}, []))) == []
-    im_it = ['foo']
-    rd_it = ['foo_p', 'foo_n']
+    assert list(map(set, triplets([],     [])))       == []
+    assert list(map(set, triplets(['i1'], [])))       == [set()]
+    assert list(map(set, triplets([],     ['i1_p']))) == []
+
+    im_it = ['i1']
+    rd_it = ['i1_p', 'i1_n']
     assert list(map(set, triplets(im_it, rd_it))) == [
-            {('foo', 'foo_p', 'foo_n')}
-        ]
-    im_it = ['foo', 'bar']
-    rd_it = ['foo_p', 'foo_n', 'bar_p', 'bar_n']
+        {('i1', 'i1_p', 'i1_n')}
+    ]
+    im_it = ['i1', 'i2']
+    rd_it = ['i1_p', 'i1_n', 'i2_p', 'i2_n']
     assert list(map(set, triplets(im_it, rd_it))) == [
-            {('foo', 'foo_p', 'foo_n'), ('foo', 'foo_p', 'bar_p'), ('foo', 'foo_p', 'bar_n')},
-            {('bar', 'bar_p', 'bar_n'), ('bar', 'bar_p', 'foo_n'), ('bar', 'bar_p', 'foo_p')},
-        ]
+        {('i1', 'i1_p', 'i1_n'), ('i1', 'i1_p', 'i2_p'), ('i1', 'i1_p', 'i2_n')},
+        {('i2', 'i2_p', 'i2_n'), ('i2', 'i2_p', 'i1_n'), ('i2', 'i2_p', 'i1_p')},
+    ]
+
+
+def test_cosine_dist():
+    o = torch.ones ((1, 2))
+    z = torch.zeros((1, 2))
+    assert locate.cosine_dist(o, o) == 0
+    assert locate.cosine_dist(z, z) == 1
+    assert locate.cosine_dist(o, z) == 1
+    assert locate.cosine_dist(z, o) == 1
 
 
 def test_triplet_loss():
-    p = {'path': torch.tensor([[0., 2.]])}
-    n = {'path': torch.tensor([[2., 0.]])}
-    l = ft.partial(locate.triplet_loss, 0., lambda x: x)
-    assert l(p, p, p) == torch.tensor([0.])
-    assert l(p, p, n) == torch.tensor([0.])
-    assert l(p, n, p) == torch.tensor([1.])
-    assert l(p, n, n) == torch.tensor([0.])
-    assert l(n, n, n) == torch.tensor([0.])
+    p  = {'path': torch.ones ((1, 2))}
+    n  = {'path': torch.zeros((1, 2))}
 
-    l = ft.partial(locate.triplet_loss, .5, lambda x: x)
-    assert l(p, p, p) == torch.tensor([.5])
-    assert l(p, p, n) == torch.tensor([0.])
-    assert l(p, n, n) == torch.tensor([.5])
-    assert l(n, n, n) == torch.tensor([.5])
+    loss = ft.partial(locate.triplet_loss, 0., lambda x: x)
+    assert loss(p, p, p) == torch.tensor([0.])
+    assert loss(p, p, n) == torch.tensor([0.])
+    assert loss(p, n, p) == torch.tensor([1.])
+    assert loss(p, n, n) == torch.tensor([0.])
+    assert loss(n, n, n) == torch.tensor([0.])
+
+    loss = ft.partial(locate.triplet_loss, .5, lambda x: x)
+    assert loss(p, p, p) == torch.tensor([.5])
+    assert loss(p, p, n) == torch.tensor([0.])
+    assert loss(p, n, n) == torch.tensor([.5])
+    assert loss(n, n, n) == torch.tensor([.5])
 
 
 def test_early_stopping():

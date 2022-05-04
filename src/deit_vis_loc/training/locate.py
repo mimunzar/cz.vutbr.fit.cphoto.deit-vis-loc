@@ -18,7 +18,6 @@ import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.spherical as spherical
 
 
-
 def is_dist_close(limit_m, tol_m, im, render):
     pluck = ft.partial(util.pluck, ['latitude', 'longitude'])
     return spherical.dist_m(pluck(im), pluck(render)) - limit_m <= tol_m
@@ -29,6 +28,17 @@ def is_yaw_close(limit_rad, tol_rad, im, render):
     return spherical.circle_dist_rad(pluck(im), pluck(render)) - limit_rad <= tol_rad
 
 
+def iter_neg_renders(params, im, rd_it):
+    d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
+    return filter(util.complement(ft.partial(is_dist_close, d, d_tol, im)), rd_it)
+
+
+def iter_hard_neg_renders(params, im, rd_by_dist_it):
+    return util.take(params['negatives']['samples'],
+            iter_neg_renders(params['negatives'], im, rd_by_dist_it))
+    #^ Hardest negatives have shortest descriptor distances from an image.
+
+
 def iter_pos_renders(params, im, rd_it):
     d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
     y, y_tol = map(ma.radians, util.pluck(['yaw_deg','yaw_tol_deg'], params))
@@ -36,29 +46,41 @@ def iter_pos_renders(params, im, rd_it):
             filter(ft.partial(is_yaw_close, y, y_tol, im), rd_it))
 
 
-def iter_neg_renders(params, im, rd_it):
-    d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
-    return filter(util.complement(ft.partial(is_dist_close, d, d_tol, im)), rd_it)
+def iter_hard_pos_renders(params, im, rd_by_dist_it):
+    return util.take_last(params['positives']['samples'],
+            iter_pos_renders(params['positives'], im, rd_by_dist_it))
+    #^ Hardest positives have longest descriptor distances from an image.
 
 
-def cosine_distance(emb, emb_other):
+def cosine_dist(emb, emb_other):
     return 1 - F.cosine_similarity(emb, emb_other)
 
 
-def iter_hard_pos_renders(fn_fwd, params, im, rd_it):
-    pos_it = iter_pos_renders(params, im, rd_it)
-    with torch.no_grad():
-        im_dist = ft.partial(cosine_distance, fn_fwd(im['path']))
-        hard_it = sorted(pos_it, reverse=True, key=lambda r: im_dist(fn_fwd(r['path'])))
-        yield from util.take(params['n_positives'], hard_it)
+def iter_im_render_dist(fn_fwd, fn_mem_fwd, rd_it, im):
+    path = ft.partial(util.pluck, ['path'])
+    dist = ft.partial(cosine_dist, fn_fwd(path(im)))
+    def iter_im_render_batch_dist(rd_it):
+        with torch.no_grad():
+            e_it = map(fn_mem_fwd, map(path, rd_it))
+            return zip(rd_it, dist(torch.cat(tuple(e_it))).cpu())
+    return util.flatten(map(iter_im_render_batch_dist, util.partition(100, rd_it, strict=False)))
+    # => ((r1, d1), (r2, d2), ...)
 
 
-def iter_hard_neg_renders(fn_fwd, params, im, rd_it):
-    neg_it = iter_neg_renders(params, im, rd_it)
-    with torch.no_grad():
-        im_dist = ft.partial(cosine_distance, fn_fwd(im['path']))
-        hard_it = sorted(neg_it, key=lambda r: im_dist(fn_fwd(r['path'])))
-        yield from util.take(params['n_negatives'], hard_it)
+def iter_pos_neg_renders(params, fn_fwd, fn_mem_fwd, rd_it, im):
+    rdd_it     = iter_im_render_dist(fn_fwd, fn_mem_fwd, rd_it, im)
+    by_dist_it = tuple(map(util.first, sorted(rdd_it, key=util.second)))
+    return ((im,),
+            tuple(iter_hard_pos_renders(params, im, by_dist_it)),
+            tuple(iter_hard_neg_renders(params, im, by_dist_it)))
+    # => ((im,), (pr1, pr2,...), (nr1, nr2,...))
+
+
+def iter_im_pos_neg_renders(device, params, fn_fwd, im_it, rd_it):
+    mem_fwd = util.memoize_tensor(device, fn_fwd)
+    return map(ft.partial(iter_pos_neg_renders, params, fn_fwd, mem_fwd, rd_it), im_it)
+    # => (((im1,), (pr1, pr2,...), (nr1, nr2,...)),
+    #     ((im1,), (pr1, pr2,...), (nr1, nr2,...)), ...)
 
 
 def iter_triplets(fn_iter_pos, fn_iter_neg, im_it, rd_it):
@@ -68,6 +90,11 @@ def iter_triplets(fn_iter_pos, fn_iter_neg, im_it, rd_it):
         im_neg = fn_iter_neg(im, rd_it)
         return it.product((im,), im_pos, im_neg)
     return map(iter_triplets, im_it)
+
+
+def triplet_loss(margin, fn_fwd, anchor, pos, neg):
+    dist = ft.partial(cosine_dist, fn_fwd(anchor['path']))
+    return torch.clamp(dist(fn_fwd(pos['path'])) - dist(fn_fwd(neg['path'])) + margin, min=0)
 
 
 def mining_stats(acc, mining_stats):
@@ -84,13 +111,6 @@ def iter_mined_triplets(n, fn_iter_tps, fn_tp_loss, im_it, rd_it):
             hard_it = util.take(n, filter(util.first, it.starmap(prepend_loss, samp_it)))
             return ft.reduce(mining_stats, hard_it, {'samples': 0, 'triplets': []})
     return map(choose_hard, fn_iter_tps(im_it, rd_it))
-
-
-def triplet_loss(margin, fn_fwd, anchor, pos, neg):
-    a_embed = fn_fwd(anchor['path'])
-    a_p_dis = 1 - F.cosine_similarity(a_embed, fn_fwd(pos['path']))
-    a_n_dis = 1 - F.cosine_similarity(a_embed, fn_fwd(neg['path']))
-    return torch.clamp(a_p_dis - a_n_dis + margin, min=0)
 
 
 def iter_im_loss(fn_fwd, params, im_it, rd_it):

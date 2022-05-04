@@ -28,6 +28,10 @@ def take(n, iterable):
     return it.islice(iterable, n)
 
 
+def take_last(n, iterable):
+    return cl.deque(iterable, maxlen=n)
+
+
 def drop(n, iterable):
     return it.islice(iterable, n, None)
 
@@ -65,12 +69,27 @@ def update(k, f, d):
     return d
 
 
+def clamp(minimum, maximum, n):
+    return max(minimum, min(maximum, n))
+
+
+def identity(x):
+    return x
+
+
 def memoize(f):
     return ft.lru_cache(maxsize=None)(f)
 
 
-def clamp(minimum, maximum, n):
-    return max(minimum, min(maximum, n))
+def memoize_tensor(device, f):
+    mem = {}
+    def cached_fn(*args):
+        if args in mem:
+            return mem[args].to(device)
+        result    = f(*args)
+        mem[args] = result.cpu()
+        return result
+    return cached_fn
 
 
 def complement(f):

@@ -39,6 +39,13 @@ def test_take():
     assert list(util.take(42,   [1, 2, 3])) == [1, 2, 3]
 
 
+def test_take_last():
+    assert list(util.take_last(None, [1, 2, 3])) == [1, 2, 3]
+    assert list(util.take_last(0,    [1, 2, 3])) == []
+    assert list(util.take_last(2,    [1, 2, 3])) == [2, 3]
+    assert list(util.take_last(42,   [1, 2, 3])) == [1, 2, 3]
+
+
 def test_drop():
     assert list(util.drop(None, [1, 2, 3])) == [1, 2, 3]
     assert list(util.drop(0,    [1, 2, 3])) == [1, 2, 3]
