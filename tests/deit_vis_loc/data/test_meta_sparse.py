@@ -2,15 +2,15 @@
 
 import pytest
 
-import src.deit_vis_loc.preprocessing.dataset_render as dataset_renders
+import src.deit_vis_loc.data.meta_sparse as meta_sparse
 
 
-def test_parse_info_line():
+def test_parse_line():
     with pytest.raises(Exception):
-        dataset_renders.parse_info_line([])
+        meta_sparse.parse_line([])
     with pytest.raises(Exception):
-        dataset_renders.parse_info_line(['foo', 'bar', 'baz'])
-    assert dataset_renders.parse_info_line([
+        meta_sparse.parse_line(['foo', 'bar', 'baz'])
+    assert meta_sparse.parse_line([
         'segment',
         'query',
         '46.2173',

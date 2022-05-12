@@ -4,7 +4,7 @@ import argparse
 import sys
 import torch.optim
 
-import src.deit_vis_loc.preprocessing.load_data as load_data
+import src.deit_vis_loc.data.load_data as load_data
 import src.deit_vis_loc.libs.util as util
 import src.deit_vis_loc.training.locate as locate
 import src.deit_vis_loc.training.model as model

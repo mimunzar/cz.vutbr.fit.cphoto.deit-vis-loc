@@ -2,15 +2,15 @@
 
 import pytest
 
-import src.deit_vis_loc.preprocessing.dataset_im as dataset_im
+import src.deit_vis_loc.data.meta_geopose as meta_geopose
 
 
-def test_parse_info_file():
+def test_parse_meta():
     with pytest.raises(Exception):
-        dataset_im.parse_info_file('foo', [])
+        meta_geopose.parse_meta('foo', [])
     with pytest.raises(Exception):
-        dataset_im.parse_info_file('foo', ['MANUAL', 'foo'])
-    assert dataset_im.parse_info_file('foo', [
+        meta_geopose.parse_meta('foo', ['MANUAL', 'foo'])
+    assert meta_geopose.parse_meta('foo', [
         'MANUAL',
         '0.577994 -0.0274898 0.0177252',
         '46.1766',

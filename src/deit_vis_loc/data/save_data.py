@@ -8,8 +8,8 @@ import pickle
 import sys
 
 import src.deit_vis_loc.libs.util as util
-import src.deit_vis_loc.preprocessing.dataset_im as dataset_im
-import src.deit_vis_loc.preprocessing.dataset_render as dataset_render
+import src.deit_vis_loc.data.dataset_im as dataset_im
+import src.deit_vis_loc.data.dataset_render as dataset_render
 
 
 def parse_args(args_it):

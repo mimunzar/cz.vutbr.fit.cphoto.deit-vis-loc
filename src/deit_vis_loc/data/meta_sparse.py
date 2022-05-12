@@ -2,11 +2,8 @@
 
 import collections as cl
 import os
-import re
 
-
-def parse_into(od, it):
-    return {k: f(v) for (k, f), v in zip(od.items(), it)}
+import src.deit_vis_loc.data.commons as commons
 
 
 INFO_FILE_FIELDS = cl.OrderedDict({
@@ -21,8 +18,8 @@ INFO_FILE_FIELDS = cl.OrderedDict({
     'roll'      : lambda x: float(x),
 })
 
-def parse_info_line(content_it):
-    parsed = parse_into(INFO_FILE_FIELDS, content_it)
+def parse_line(csv_it):
+    parsed = commons.parse_into(INFO_FILE_FIELDS, csv_it)
     return {
         'name'      : parsed['segment'],
         'query'     : parsed['query'],
@@ -37,11 +34,11 @@ def parse_info_line(content_it):
     # for geopose images and the pitch and roll are 0.
 
 
-def parse(dpath):
-    white_re = re.compile(r'\s+')
-    inf_path = os.path.join(os.path.expanduser(dpath), 'database_segments/datasetInfoClean.csv')
-    try:
-        return map(parse_info_line, (white_re.sub('', l).split(',') for l in open(inf_path)))
-    except Exception as ex:
-        raise ValueError(f'Failed to parse {dpath} ({ex})')
+def info_filepath(dataset_dir, mod):
+    return os.path.join(dataset_dir,
+            'sparse_database', f'database_{mod}', 'datasetInfoClean.csv')
+
+
+def parse(dataset_dir, mod):
+    return commons.parse_csv_file(parse_line, info_filepath(dataset_dir, mod))
 

@@ -6,46 +6,6 @@ import torch
 import src.deit_vis_loc.training.locate as locate
 
 
-def test_iter_apply_ims_partitionwise():
-    iter_part = ft.partial(locate.iter_apply_ims_partitionwise, lambda x: x)
-
-    assert list(map(tuple, iter_part(1, [],           [])))           == []
-    assert list(map(tuple, iter_part(1, ['i1', 'i2'], [])))           == []
-    assert list(map(tuple, iter_part(1, [],           ['r1', 'r2']))) == [(), ()]
-
-    assert list(map(tuple, iter_part(1, ['i1', 'i2'], ['r1', 'r2']))) == [
-        (('i1', ('r1',)), ('i2', ('r1',))),
-        (('i1', ('r2',)), ('i2', ('r2',))),
-    ]
-    assert list(map(tuple, iter_part(2, ['i1', 'i2'], ['r1', 'r2']))) == [
-        (('i1', ('r1', 'r2')), ('i2', ('r1', 'r2')))
-    ]
-    assert list(map(tuple, iter_part(3, ['i1', 'i2'], ['r1', 'r2']))) == [
-        (('i1', ('r1', 'r2')), ('i2', ('r1', 'r2')))
-    ]
-
-
-def test_iter_partitioned_process():
-    iter_proc = ft.partial(locate.iter_partitioned_process, lambda x: x, lambda x: x)
-
-    assert list(map(tuple, iter_proc(1, [],           [])))           == []
-    assert list(map(tuple, iter_proc(1, ['i1', 'i2'], [])))           == []
-    assert list(map(tuple, iter_proc(1, [],           ['r1', 'r2']))) == []
-
-    assert list(map(tuple, iter_proc(1, ['i1', 'i2'], ['r1', 'r2']))) == [
-        ('i1', (('i1', ('r1',)), ('i1', ('r2',)))),
-        ('i2', (('i2', ('r1',)), ('i2', ('r2',)))),
-    ]
-    assert list(map(tuple, iter_proc(2, ['i1', 'i2'], ['r1', 'r2']))) == [
-        ('i1', (('i1', ('r1', 'r2')),)),
-        ('i2', (('i2', ('r1', 'r2')),)),
-    ]
-    assert list(map(tuple, iter_proc(3, ['i1', 'i2'], ['r1', 'r2']))) == [
-        ('i1', (('i1', ('r1', 'r2')),)),
-        ('i2', (('i2', ('r1', 'r2')),)),
-    ]
-
-
 def test_iter_triplets():
     im_pos   = lambda im, render: render == f'{im}_p'
     im_neg   = lambda im, render: render != f'{im}_p'

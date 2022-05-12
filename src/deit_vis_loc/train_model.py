@@ -14,7 +14,7 @@ import torch.multiprocessing.spawn
 import torch.nn.parallel
 import torch.optim
 
-import src.deit_vis_loc.preprocessing.load_data as load_data
+import src.deit_vis_loc.data.load_data as load_data
 import src.deit_vis_loc.training.callbacks as callbacks
 import src.deit_vis_loc.training.config as config
 import src.deit_vis_loc.training.locate as locate
