@@ -15,11 +15,13 @@ import src.deit_vis_loc.data.commons as commons
 
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--geopose-dir', help='The path to Geopose Dataset',
+    parser.add_argument('--geopose-dir', help='The path to Geopose dataset',
             required=True, metavar='DIR')
-    parser.add_argument('--output-dir',  help='The output directory for Preprocessed Dataset',
+    parser.add_argument('--n-images',    help='The number of images of resulting dataset',
+            required=False, type=int, default=None, metavar='NUM')
+    parser.add_argument('--output-dir',  help='The output directory for resulting dataset',
             required=True, metavar='DIR')
-    parser.add_argument('--resolution',  help='The image output resolution',
+    parser.add_argument('--resolution',  help='The resolution of output images',
             required=True, metavar='INT', type=int)
     return vars(parser.parse_args(args_it))
 
@@ -30,21 +32,6 @@ def save_processed(im_dir, meta_f, data):
     im.save(im_path)
     pickle.dump(meta, meta_f)
     return (im_path, meta)
-
-
-def pad_to_square(res, im):
-    n_im = Image.new('RGB', (res, res))
-    n_im.paste(im.convert('RGB'), [(res - x)//2 for x in im.size])
-    return n_im
-
-
-def resize_keep_ratio(res, im):
-    ratio = res/max(im.size)
-    return im.resize([int(ratio*x) for x in im.size], Image.BICUBIC)
-
-
-def process_im(res, path):
-    return pad_to_square(res, resize_keep_ratio(res, Image.open(path)))
 
 
 CAMERA_FIELDS = cl.OrderedDict({
@@ -83,6 +70,14 @@ def parse_metafile(path):
         raise ValueError(f'Failed to parse {path} ({ex})')
 
 
+def process_im(resolution, im):
+    proc_im = util.compose(
+        ft.partial(commons.pad_to_square,     resolution),
+        ft.partial(commons.resize_keep_ratio, resolution),
+    )
+    return proc_im(Image.open(im))
+
+
 def process_geo_dir(resolution, dpath):
     im_path = os.path.join(dpath, 'photo.jpg')
     if not os.path.exists(im_path):
@@ -103,7 +98,7 @@ if '__main__' == __name__:
 
     query_dir    = os.path.join(args['output_dir'], 'queries')
     query_im_dir = os.path.join(query_dir, str(resolution))
-    geo_name_it  = tuple(util.second(util.first(os.walk(geo_dir))))
+    geo_name_it  = tuple(util.take(args['n_images'], util.second(util.first(os.walk(geo_dir)))))
     prog_printer = ft.partial(print_progress, len(geo_name_it))
 
     os.makedirs(query_im_dir, exist_ok=True)

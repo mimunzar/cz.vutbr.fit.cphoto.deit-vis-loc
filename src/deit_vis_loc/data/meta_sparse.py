@@ -40,5 +40,5 @@ def info_filepath(dataset_dir, mod):
 
 
 def parse(dataset_dir, mod):
-    return commons.parse_csv_file(parse_line, info_filepath(dataset_dir, mod))
+    return commons.iter_csv_file(parse_line, info_filepath(dataset_dir, mod))
 

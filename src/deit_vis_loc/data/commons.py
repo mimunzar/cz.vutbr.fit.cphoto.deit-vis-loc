@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import re
+from PIL import Image
 
 
 def parse_into(ordt, csv_it):
@@ -17,9 +18,20 @@ def iter_csv_lines(s):
     return del_white(s).replace(';', ',').split(',')
 
 
-def parse_csv_file(fn_parse_line, fpath):
+def iter_csv_file(fn_parse_line, fpath):
     try:
         return map(fn_parse_line, map(iter_csv_lines, open(fpath)))
     except Exception as ex:
         raise ValueError(f'Failed to parse {fpath} ({ex})')
+
+
+def pad_to_square(res, im):
+    n_im = Image.new('RGB', (res, res))
+    n_im.paste(im.convert('RGB'), [(res - x)//2 for x in im.size])
+    return n_im
+
+
+def resize_keep_ratio(res, im):
+    ratio = res/max(im.size)
+    return im.resize([int(ratio*x) for x in im.size], Image.BICUBIC)
 
