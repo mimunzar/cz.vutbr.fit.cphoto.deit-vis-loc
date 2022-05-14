@@ -9,9 +9,9 @@ import pickle
 import sys
 from PIL import Image
 
+import src.deit_vis_loc.data.commons as commons
 import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.util as util
-import src.deit_vis_loc.data.commons as commons
 
 
 def parse_args(args_it):
@@ -38,30 +38,32 @@ def save_processed(im_dir, meta_f, data):
 
 
 INFO_FILE_FIELDS = cl.OrderedDict({
-    'id'        : lambda x: x,
+    'segment'   : lambda x: x,
     'query'     : lambda x: x,
     'latitude'  : lambda x: float(x),
     'longitude' : lambda x: float(x),
     'elevation' : lambda x: float(x),
+    'rotation'  : lambda x: float(x),
     'yaw'       : lambda x: float(x),
     'pitch'     : lambda x: float(x),
     'roll'      : lambda x: float(x),
-    'fov'       : lambda x: float(x),
 })
 
 def parse_line(dpath, csv_it):
     parsed = commons.parse_into(INFO_FILE_FIELDS, csv_it)
     return {
-        'path'      : os.path.join(dpath, f'{parsed["query"]}.jpg'),
-        'name'      : parsed['query'],
+        'path'      : os.path.join(dpath, f'{parsed["segment"]}.jpg'),
+        'name'      : parsed['segment'],
         'query'     : parsed['query'],
         'latitude'  : parsed['latitude'],
         'longitude' : parsed['longitude'],
         'elevation' : parsed['elevation'],
-        'yaw'       : parsed['yaw'],
-        'pitch'     : parsed['pitch'],
-        'roll'      : parsed['roll'],
+        'yaw'       : parsed['rotation'],
+        'pitch'     : 0,
+        'roll'      : 0,
     }
+    #^ In datasetInfoClean.csv the rotation fields coresponds to yaw angles
+    # for geopose images and the pitch and roll are 0.
 
 
 def process_im(resolution, im):
@@ -73,7 +75,7 @@ def process_im(resolution, im):
 
 
 def process_render(data_dir, resolution, meta):
-    im_path = os.path.join(os.path.join(data_dir, f'{meta["name"]}.png'))
+    im_path = os.path.join(os.path.join(data_dir, f'{meta["name"]}_segments.png'))
     return (process_im(resolution, im_path), meta)
 
 
@@ -87,13 +89,12 @@ if '__main__' == __name__:
     args       = parse_args(sys.argv[1:])
     resolution = args['resolution']
     modality   = args['modality']
-
-    geo_dir    = os.path.expanduser(args['sparse_dir'])
-    data_dir   = os.path.join(geo_dir, 'sparse_queries', f'query_{modality}')
+    sparse_dir = os.path.expanduser(args['sparse_dir'])
+    data_dir   = os.path.join(sparse_dir, 'sparse_database', f'database_{modality}')
     info_fpath = os.path.join(data_dir, 'datasetInfoClean.csv')
 
     out_dir       = os.path.expanduser(args['output_dir'])
-    render_dir    = os.path.join(out_dir, 'renders', 'pretraining', modality)
+    render_dir    = os.path.join(out_dir, 'renders', 'sparse', modality)
     render_im_dir = os.path.join(render_dir, str(resolution))
 
     rd_it        = util.take(args['n_images'],
