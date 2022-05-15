@@ -50,10 +50,9 @@ INFO_FILE_FIELDS = cl.OrderedDict({
     'FOV'        : lambda x: float(x),
 })
 
-def parse_meta(query_im_dir, name, content_it):
+def parse_meta(name, content_it):
     parsed = commons.parse_into(INFO_FILE_FIELDS, content_it)
     return {
-        'path'      : os.path.join(query_im_dir, f'{name}.jpg'),
         'name'      : name,
         'latitude'  : parsed['latitude'],
         'longitude' : parsed['longitude'],
@@ -65,10 +64,10 @@ def parse_meta(query_im_dir, name, content_it):
     }
 
 
-def parse_metafile(query_im_dir, path):
+def parse_metafile(path):
     _, name = os.path.split(util.first(os.path.split(path)))
     try:
-        return parse_meta(query_im_dir, name, (l.strip() for l in open(path)))
+        return parse_meta(name, (l.strip() for l in open(path)))
     except Exception as ex:
         raise ValueError(f'Failed to parse {path} ({ex})')
 
@@ -81,12 +80,12 @@ def process_im(resolution, im):
     return proc_im(Image.open(im))
 
 
-def process_geo_dir(fn_member, query_im_dir, resolution, dpath):
+def process_geo_dir(fn_member, resolution, dpath):
     im_path = os.path.join(dpath, 'photo.jpg')
     if not os.path.exists(im_path):
         im_path = os.path.join(dpath, 'photo.jpeg')
     return (process_im(resolution, im_path),
-            fn_member(parse_metafile(query_im_dir, os.path.join(dpath, 'info.txt'))))
+            fn_member(parse_metafile(os.path.join(dpath, 'info.txt'))))
 
 
 def print_progress(total, data):
@@ -142,7 +141,7 @@ if '__main__' == __name__:
     util.dorun(
         map(prog_printer, enumerate(
             map(ft.partial(save_processed, query_im_dir, meta_writers),
-                map(ft.partial(process_geo_dir, membership, query_im_dir, resolution),
+                map(ft.partial(process_geo_dir, membership, resolution),
                     map(ft.partial(os.path.join, geo_dir), geo_name_it))), 1)))
 
     pickle.dump('EOF', train_f)

@@ -49,10 +49,9 @@ INFO_FILE_FIELDS = cl.OrderedDict({
     'roll'      : lambda x: float(x),
 })
 
-def parse_line(dpath, csv_it):
+def parse_line(csv_it):
     parsed = commons.parse_into(INFO_FILE_FIELDS, csv_it)
     return {
-        'path'      : os.path.join(dpath, f'{parsed["segment"]}.jpg'),
         'name'      : parsed['segment'],
         'query'     : parsed['query'],
         'latitude'  : parsed['latitude'],
@@ -97,8 +96,7 @@ if '__main__' == __name__:
     render_dir    = os.path.join(out_dir, 'renders', 'sparse', modality)
     render_im_dir = os.path.join(render_dir, str(resolution))
 
-    rd_it        = util.take(args['n_images'],
-        commons.iter_csv_file(ft.partial(parse_line, render_im_dir), info_fpath))
+    rd_it        = util.take(args['n_images'], commons.iter_csv_file(parse_line, info_fpath))
     prog_printer = ft.partial(print_progress,
         sum(map(util.first, zip(it.repeat(1), util.take(args['n_images'], open(info_fpath))))))
 

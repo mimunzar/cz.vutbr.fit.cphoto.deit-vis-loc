@@ -69,6 +69,11 @@ def update(k, f, d):
     return d
 
 
+def assoc(k, v, d):
+    d[k] = v
+    return d
+
+
 def clamp(minimum, maximum, n):
     return max(minimum, min(maximum, n))
 
