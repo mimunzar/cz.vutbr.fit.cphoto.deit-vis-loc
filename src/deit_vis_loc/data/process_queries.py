@@ -17,6 +17,8 @@ def parse_args(args_it):
     parser = argparse.ArgumentParser()
     parser.add_argument('--geopose-dir', help='The path to Geopose dataset',
             required=True, metavar='DIR')
+    parser.add_argument('--sparse-dir',  help='The path to Sparse dataset',
+            required=True, metavar='DIR')
     parser.add_argument('--n-images',    help='The number of images of resulting dataset',
             required=False, type=int, default=None, metavar='NUM')
     parser.add_argument('--output-dir',  help='The output directory for resulting dataset',
@@ -26,11 +28,11 @@ def parse_args(args_it):
     return vars(parser.parse_args(args_it))
 
 
-def save_processed(im_dir, meta_f, data):
-    im, meta = data
-    im_path  = os.path.join(im_dir, f'{meta["name"]}.jpg')
+def save_processed(im_dir, meta_writers, data):
+    im, (member, meta) = data
+    im_path            = os.path.join(im_dir, f'{meta["name"]}.jpg')
+    meta_writers[member](meta)
     im.save(im_path)
-    pickle.dump(meta, meta_f)
     return (im_path, meta)
 
 
@@ -48,9 +50,10 @@ INFO_FILE_FIELDS = cl.OrderedDict({
     'FOV'        : lambda x: float(x),
 })
 
-def parse_meta(name, content_it):
+def parse_meta(query_im_dir, name, content_it):
     parsed = commons.parse_into(INFO_FILE_FIELDS, content_it)
     return {
+        'path'      : os.path.join(query_im_dir, f'{name}.jpg'),
         'name'      : name,
         'latitude'  : parsed['latitude'],
         'longitude' : parsed['longitude'],
@@ -62,10 +65,10 @@ def parse_meta(name, content_it):
     }
 
 
-def parse_metafile(path):
+def parse_metafile(query_im_dir, path):
     _, name = os.path.split(util.first(os.path.split(path)))
     try:
-        return parse_meta(name, (l.strip() for l in open(path)))
+        return parse_meta(query_im_dir, name, (l.strip() for l in open(path)))
     except Exception as ex:
         raise ValueError(f'Failed to parse {path} ({ex})')
 
@@ -78,36 +81,75 @@ def process_im(resolution, im):
     return proc_im(Image.open(im))
 
 
-def process_geo_dir(resolution, dpath):
+def process_geo_dir(fn_member, query_im_dir, resolution, dpath):
     im_path = os.path.join(dpath, 'photo.jpg')
     if not os.path.exists(im_path):
         im_path = os.path.join(dpath, 'photo.jpeg')
-    return (process_im(resolution, im_path), parse_metafile(os.path.join(dpath, 'info.txt')))
+    return (process_im(resolution, im_path),
+            fn_member(parse_metafile(query_im_dir, os.path.join(dpath, 'info.txt'))))
 
 
 def print_progress(total, data):
     done, *_ = data
     prog_str = log.fmt_bar(bar_width=50, total=total, curr=done)
-    print(prog_str.center(log.LINE_WIDTH), end='\n' if total == done else '\r', flush=True)
+    print(prog_str.center(log.LINE_WIDTH),
+            end='\n' if total == done else '\r', flush=True)
+
+
+def iter_query_list(dpath, name):
+    return (util.first(os.path.splitext(l.strip()))
+            for l in open(os.path.join(dpath, name)))
+
+
+def dataset_membership(train_it, val_it, test_it, desc):
+    name = desc['name']
+    if name in train_it: return ('TRAIN', desc)
+    if name in val_it  : return ('VAL'  , desc)
+    if name in test_it : return ('TEST' , desc)
+    raise ValueError(f'Failed to find {name} in datasets')
 
 
 if '__main__' == __name__:
     args       = parse_args(sys.argv[1:])
-    geo_dir    = args['geopose_dir']
     resolution = args['resolution']
 
-    query_dir    = os.path.join(args['output_dir'], 'queries')
+    out_dir      = os.path.expanduser(args['output_dir'])
+    query_dir    = os.path.join(out_dir, 'queries')
     query_im_dir = os.path.join(query_dir, str(resolution))
+    os.makedirs(query_im_dir, exist_ok=True)
+
+    sparse_dir   = os.path.expanduser(args['sparse_dir'])
+    sparse_q_dir = os.path.join(sparse_dir, 'sparse_queries', 'query_original_result')
+    membership   = ft.partial(dataset_membership,
+        set(iter_query_list(sparse_q_dir, 'train.txt')),
+        set(iter_query_list(sparse_q_dir, 'val.txt')),
+        set(iter_query_list(sparse_q_dir, 'test.txt')))
+
+    train_f      = open(os.path.join(query_dir, 'train.bin'), 'wb')
+    val_f        = open(os.path.join(query_dir, 'val.bin'),   'wb')
+    test_f       = open(os.path.join(query_dir, 'test.bin'),  'wb')
+    meta_writers = {
+        'TRAIN': lambda m: pickle.dump(m, train_f),
+        'VAL'  : lambda m: pickle.dump(m, val_f),
+        'TEST' : lambda m: pickle.dump(m, test_f),
+    }
+
+    geo_dir      = os.path.expanduser(args['geopose_dir'])
     geo_name_it  = tuple(util.take(args['n_images'], util.second(util.first(os.walk(geo_dir)))))
     prog_printer = ft.partial(print_progress, len(geo_name_it))
 
-    os.makedirs(query_im_dir, exist_ok=True)
-    with open(os.path.join(query_dir, 'meta.bin'), 'wb') as meta_f:
-        prog_printer((0, None))
-        util.dorun(
-            map(prog_printer, enumerate(
-                map(ft.partial(save_processed, query_im_dir, meta_f),
-                    map(ft.partial(process_geo_dir, resolution),
-                        map(ft.partial(os.path.join, geo_dir), geo_name_it))), 1)))
-        pickle.dump('EOF', meta_f)
+    prog_printer((0, None))
+    util.dorun(
+        map(prog_printer, enumerate(
+            map(ft.partial(save_processed, query_im_dir, meta_writers),
+                map(ft.partial(process_geo_dir, membership, query_im_dir, resolution),
+                    map(ft.partial(os.path.join, geo_dir), geo_name_it))), 1)))
+
+    pickle.dump('EOF', train_f)
+    pickle.dump('EOF', val_f)
+    pickle.dump('EOF', test_f)
+
+    train_f.close()
+    val_f  .close()
+    test_f .close()
 
