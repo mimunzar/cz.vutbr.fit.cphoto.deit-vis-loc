@@ -11,21 +11,18 @@ import matplotlib.gridspec as mpgrid
 import matplotlib.image as mpimg
 import matplotlib.pyplot as mpplt
 
-import src.deit_vis_loc.data.load_data as load_data
+import src.deit_vis_loc.data.loader as loader
 import src.deit_vis_loc.training.locate as locate
 import src.deit_vis_loc.libs.util as util
 
 
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset-dir', help='The path to dataset of rendered segments',
+    parser.add_argument('--data-dir',   help='The path to the dataset',
             required=True, metavar='DIR')
+    parser.add_argument('--resolution', help='The resolution of output images',
+            required=False, metavar='INT', type=int, default=224)
     return vars(parser.parse_args(args_it))
-
-
-def iter_positives(params, im_it, renders_it):
-    renders_it = tuple(renders_it)
-    return map(lambda im: (im, locate.iter_pos_renders(params, im, renders_it)), im_it)
 
 
 def plot_im_on_axis(im, axis):
@@ -49,15 +46,30 @@ def iter_plot_positives(im, renders_it):
     return (im, tuple(util.flatten(it.starmap(plot_row, enumerate(util.partition(ncols, renders_it))))))
 
 
+def iter_positives(params, im_it, renders_it):
+    renders_it = tuple(renders_it)
+    return map(lambda im: (im, locate.iter_pos_renders(params, im, renders_it)), im_it)
+
+
+PRETRAINING_PARAMS = {
+    'dist_m'      : 0,
+    'dist_tol_m'  : 1,
+    'yaw_deg'     : 0,
+    'yaw_tol_deg' : 1,
+}
+
+SPARSE_PARAMS = {
+    'dist_m'      : 20,
+    'dist_tol_m'  : 1,
+    'yaw_deg'     : 15,
+    'yaw_tol_deg' : 1,
+}
+
 if '__main__' == __name__:
-    args   = parse_args(sys.argv[1:])
-    pos_it = tuple(iter_positives({
-            'dist_m'            : 100,
-            'dist_tol_m'  : 0,
-            'yaw_deg'           : 15,
-            'yaw_tol_deg' : 1,
-        },
-        load_data.iter_im_data(args['dataset_dir'], 'train.bin'),
-        load_data.iter_im_data(args['dataset_dir'], 'renders.bin')))
-    result = it.starmap(iter_plot_positives, random.sample(pos_it, k=len(pos_it)))
+    args          = parse_args(sys.argv[1:])
+    data_dir, res = util.pluck(['data_dir', 'resolution'], args)
+    im_it         = tuple(loader.iter_queries(data_dir, res, 'train'))
+    result        = it.starmap(iter_plot_positives, iter_positives(SPARSE_PARAMS,
+        random.sample(im_it, k=len(im_it)),
+        loader.iter_sparse_renders(data_dir, res, 'segments')))
 

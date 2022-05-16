@@ -8,10 +8,9 @@ import random
 import statistics as st
 
 import torch
-import torch.nn.functional as F
-import torchvision.transforms as T
+import torch.nn.functional as N
+import torchvision.transforms.functional as T
 from PIL import Image
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 import src.deit_vis_loc.libs.util as util
 import src.deit_vis_loc.libs.log as log
@@ -53,7 +52,7 @@ def iter_hard_pos_renders(params, im, rd_by_dist_it):
 
 
 def cosine_dist(emb, emb_other):
-    return 1 - F.cosine_similarity(emb, emb_other)
+    return 1 - N.cosine_similarity(emb, emb_other)
 
 
 def iter_im_render_dist(fn_fwd, fn_mem_fwd, rd_it, im):
@@ -63,11 +62,11 @@ def iter_im_render_dist(fn_fwd, fn_mem_fwd, rd_it, im):
         with torch.no_grad():
             e_it = map(fn_mem_fwd, map(path, rd_it))
             return zip(rd_it, dist(torch.cat(tuple(e_it))).cpu())
-    return util.flatten(map(iter_im_render_batch_dist, util.partition(100, rd_it, strict=False)))
+    return util.flatten(map(iter_im_render_batch_dist, util.partition(1000, rd_it, strict=False)))
     # => ((r1, d1), (r2, d2), ...)
 
 
-def iter_pos_neg_renders(params, fn_fwd, fn_mem_fwd, rd_it, im):
+def iter_im_pos_neg(params, fn_fwd, fn_mem_fwd, rd_it, im):
     rdd_it     = iter_im_render_dist(fn_fwd, fn_mem_fwd, rd_it, im)
     by_dist_it = tuple(map(util.first, sorted(rdd_it, key=util.second)))
     return ((im,),
@@ -76,11 +75,12 @@ def iter_pos_neg_renders(params, fn_fwd, fn_mem_fwd, rd_it, im):
     # => ((im,), (pr1, pr2,...), (nr1, nr2,...))
 
 
-def iter_im_pos_neg_renders(device, params, fn_fwd, im_it, rd_it):
-    mem_fwd = util.memoize_tensor(device, fn_fwd)
-    return map(ft.partial(iter_pos_neg_renders, params, fn_fwd, mem_fwd, rd_it), im_it)
-    # => (((im1,), (pr1, pr2,...), (nr1, nr2,...)),
-    #     ((im1,), (pr1, pr2,...), (nr1, nr2,...)), ...)
+def iter_im_triplets(device, params, fn_fwd, im_it, rd_it):
+    mem_fwd  = util.memoize_tensor(device, fn_fwd)
+    iter_ipn = ft.partial(iter_im_pos_neg, params, fn_fwd, mem_fwd, tuple(rd_it))
+    return it.starmap(it.product, map(iter_ipn, im_it))
+    # => ((t1, t2, ...),
+    #     (t1, t2, ...), ...)
 
 
 def iter_triplets(fn_iter_pos, fn_iter_neg, im_it, rd_it):
@@ -122,13 +122,8 @@ def iter_im_loss(fn_fwd, params, im_it, rd_it):
     return map(lambda m: {**m, 'loss': sum(it.starmap(loss, m['triplets']))}, tp_it)
 
 
-def make_load_im(device, input_size):
-    to_tensor = T.Compose([
-        T.Resize(input_size, interpolation=3),
-        T.ToTensor(),
-        T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
-    ])
-    return lambda fpath: to_tensor(Image.open(fpath).convert('RGB')).unsqueeze(0).to(device)
+def load_im(device, fpath):
+    return T.to_tensor(Image.open(fpath)).unsqueeze(0).to(device)
 
 
 def make_minibatch_stats(stage, logfile, im_it):
