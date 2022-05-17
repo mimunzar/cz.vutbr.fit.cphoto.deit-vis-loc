@@ -7,10 +7,10 @@ import src.deit_vis_loc.data.process_renders_sparse as process_renders_sparse
 
 def test_parse_line():
     with pytest.raises(Exception):
-        process_renders_sparse.parse_line('/foo/bar', [])
+        process_renders_sparse.parse_line([])
     with pytest.raises(Exception):
-        process_renders_sparse.parse_line('/foo/bar',['foo', 'bar', 'baz'])
-    assert process_renders_sparse.parse_line('/foo/bar', [
+        process_renders_sparse.parse_line(['bar', 'baz'])
+    assert process_renders_sparse.parse_line([
         'segment',
         'query',
         '46.2173',
@@ -20,7 +20,6 @@ def test_parse_line():
         '1.5708',
         '1.5708',
         '1.0472']) == {
-                'path'      : '/foo/bar/segment.jpg',
                 'name'      : 'segment',
                 'query'     : 'query',
                 'latitude'  : 46.2173,

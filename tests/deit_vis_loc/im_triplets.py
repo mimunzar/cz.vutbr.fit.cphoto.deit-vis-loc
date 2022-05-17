@@ -19,13 +19,13 @@ import src.deit_vis_loc.libs.util as util
 
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data-dir', help='The path to dataset',
+    parser.add_argument('--data-dir',   help='The path to dataset',
             required=True, metavar='DIR')
-    parser.add_argument('--n-images', help='The amount of images to sample from the Dataset',
+    parser.add_argument('--n-images',   help='The amount of images to sample from the Dataset',
             required=True, type=int, metavar='INT')
     parser.add_argument('--resolution', help='The resolution of output images',
             required=False, metavar='INT', type=int, default=224)
-    parser.add_argument('--device',   help='The device to use',
+    parser.add_argument('--device',     help='The device to use',
             required=False, choices=['cpu', 'cuda'], default='cuda')
     return vars(parser.parse_args(args_it))
 
@@ -88,7 +88,7 @@ if '__main__' == __name__:
 
     net    = model.load(params['deit_model']).to(device)
     fwd    = util.compose(net, ft.partial(locate.load_im, device))
-    result = map(iter_plotted_triplets, locate.iter_im_triplets(device, params, fwd,
+    result = map(iter_plotted_triplets, locate.iter_im_triplet(device, params, fwd,
         random.sample(tuple(loader.iter_queries(data_dir, res, 'train')), k=args['n_images']),
         loader.iter_pretraining_renders        (data_dir, res, 'segments')))
 

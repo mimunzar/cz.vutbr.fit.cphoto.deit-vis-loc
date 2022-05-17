@@ -7,10 +7,10 @@ import src.deit_vis_loc.data.process_renders_pretraining as process_renders_pret
 
 def test_parse_line():
     with pytest.raises(Exception):
-        process_renders_pretraining.parse_line('/foo/bar', [])
+        process_renders_pretraining.parse_line([])
     with pytest.raises(Exception):
-        process_renders_pretraining.parse_line('/foo/bar', ['foo', 'bar', 'baz'])
-    assert process_renders_pretraining.parse_line('/foo/bar', [
+        process_renders_pretraining.parse_line(['foo', 'bar', 'baz'])
+    assert process_renders_pretraining.parse_line([
         '0000001',
         '28488116812_f5a57ca0f6_k',
         '46.2173',
@@ -20,7 +20,6 @@ def test_parse_line():
         '0.243122',
         '0.0148168',
         '0.549165']) == {
-            'path'      : '/foo/bar/28488116812_f5a57ca0f6_k.jpg',
             'name'      : '28488116812_f5a57ca0f6_k',
             'query'     : '28488116812_f5a57ca0f6_k',
             'latitude'  : 46.2173,

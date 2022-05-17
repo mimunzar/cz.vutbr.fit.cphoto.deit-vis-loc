@@ -115,6 +115,13 @@ def test_compose():
     assert util.compose(int, str, next, iter)([1, 2, 3]) == 1
 
 
+def test_repeatedly():
+    assert list(util.take(3, util.repeatedly(lambda: 42))) == [42, 42, 42]
+    with pytest.raises(TypeError):
+        list(util.take(3, util.repeatedly(lambda _: 42)))
+    #^ Only function without no args are allowed
+
+
 def test_validator():
     assert util.make_validator('Fail', lambda: False)()    == (False, 'Fail')
     assert util.make_validator('Fail', lambda x: x > 0)(0) == (False, 'Fail')

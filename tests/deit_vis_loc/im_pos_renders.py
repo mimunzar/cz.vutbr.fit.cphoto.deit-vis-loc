@@ -48,7 +48,7 @@ def iter_plot_positives(im, renders_it):
 
 def iter_positives(params, im_it, renders_it):
     renders_it = tuple(renders_it)
-    return map(lambda im: (im, locate.iter_pos_renders(params, im, renders_it)), im_it)
+    return map(lambda im: (im, locate.iter_posrenders(params, im, renders_it)), im_it)
 
 
 PRETRAINING_PARAMS = {

@@ -27,27 +27,27 @@ def is_yaw_close(limit_rad, tol_rad, im, render):
     return spherical.circle_dist_rad(pluck(im), pluck(render)) - limit_rad <= tol_rad
 
 
-def iter_neg_renders(params, im, rd_it):
+def iter_negrenders(params, im, rd_it):
     d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
     return filter(util.complement(ft.partial(is_dist_close, d, d_tol, im)), rd_it)
 
 
-def iter_hard_neg_renders(params, im, rd_by_dist_it):
+def iter_hardnegrenders(params, im, rd_by_dist_it):
     return util.take(params['negatives']['samples'],
-            iter_neg_renders(params['negatives'], im, rd_by_dist_it))
+            iter_negrenders(params['negatives'], im, rd_by_dist_it))
     #^ Hardest negatives have shortest descriptor distances from an image.
 
 
-def iter_pos_renders(params, im, rd_it):
+def iter_posrenders(params, im, rd_it):
     d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
     y, y_tol = map(ma.radians, util.pluck(['yaw_deg','yaw_tol_deg'], params))
     return filter(ft.partial(is_dist_close, d, d_tol, im),
             filter(ft.partial(is_yaw_close, y, y_tol, im), rd_it))
 
 
-def iter_hard_pos_renders(params, im, rd_by_dist_it):
+def iter_hardposrenders(params, im, rd_by_dist_it):
     return util.take_last(params['positives']['samples'],
-            iter_pos_renders(params['positives'], im, rd_by_dist_it))
+            iter_posrenders(params['positives'], im, rd_by_dist_it))
     #^ Hardest positives have longest descriptor distances from an image.
 
 
@@ -55,41 +55,51 @@ def cosine_dist(emb, emb_other):
     return 1 - N.cosine_similarity(emb, emb_other)
 
 
-def iter_im_render_dist(fn_fwd, fn_mem_fwd, rd_it, im):
+def iter_renderdist(fn_fwd, fn_mem_fwd, rd_it, im):
     path = ft.partial(util.pluck, ['path'])
     dist = ft.partial(cosine_dist, fn_fwd(path(im)))
     def iter_im_render_batch_dist(rd_it):
         with torch.no_grad():
-            e_it = map(fn_mem_fwd, map(path, rd_it))
+            e_it = map(util.compose(fn_mem_fwd, path), rd_it)
             return zip(rd_it, dist(torch.cat(tuple(e_it))).cpu())
-    return util.flatten(map(iter_im_render_batch_dist, util.partition(1000, rd_it, strict=False)))
+    return util.flatten(
+            map(iter_im_render_batch_dist, util.partition(1000, rd_it, strict=False)))
     # => ((r1, d1), (r2, d2), ...)
 
 
-def iter_im_pos_neg(params, fn_fwd, fn_mem_fwd, rd_it, im):
-    rdd_it     = iter_im_render_dist(fn_fwd, fn_mem_fwd, rd_it, im)
+def iter_imposneg(params, fn_fwd, fn_mem_fwd, rd_it, im):
+    rdd_it     = iter_renderdist(fn_fwd, fn_mem_fwd, rd_it, im)
     by_dist_it = tuple(map(util.first, sorted(rdd_it, key=util.second)))
     return ((im,),
-            tuple(iter_hard_pos_renders(params, im, by_dist_it)),
-            tuple(iter_hard_neg_renders(params, im, by_dist_it)))
+            tuple(iter_hardposrenders(params, im, by_dist_it)),
+            tuple(iter_hardnegrenders(params, im, by_dist_it)))
     # => ((im,), (pr1, pr2,...), (nr1, nr2,...))
 
 
-def iter_im_triplets(device, params, fn_fwd, im_it, rd_it):
-    mem_fwd  = util.memoize_tensor(device, fn_fwd)
-    iter_ipn = ft.partial(iter_im_pos_neg, params, fn_fwd, mem_fwd, tuple(rd_it))
-    return it.starmap(it.product, map(iter_ipn, im_it))
-    # => ((t1, t2, ...),
-    #     (t1, t2, ...), ...)
+def iter_im_triplet(device, params, fn_fwd, im_it, rd_it):
+    mem_fwd = util.memoize_tensor(device, fn_fwd)
+    return it.starmap(util.compose(tuple, it.product),
+        map(ft.partial(iter_imposneg, params, fn_fwd, mem_fwd, tuple(rd_it)), im_it))
+    # => ((t1, t2, ...),       ; im1
+    #     (t1, t2, ...), ...)  ; im2
 
 
-def iter_triplets(fn_iter_pos, fn_iter_neg, im_it, rd_it):
-    rd_it = tuple(rd_it)
-    def iter_triplets(im):
-        im_pos = fn_iter_pos(im, rd_it)
-        im_neg = fn_iter_neg(im, rd_it)
-        return it.product((im,), im_pos, im_neg)
-    return map(iter_triplets, im_it)
+def iter_epoch_im_triplets(device, params, fn_fwd, im_it, rd_it):
+    iter_im_tp = ft.partial(iter_im_triplet,
+            device, params, fn_fwd, tuple(im_it), tuple(rd_it))
+    return util.flatten(util.repeatedly(
+        lambda: util.take(params['mine_every'], it.repeat(tuple(iter_im_tp())))))
+    # => (((t1, t2, ...), (t1, t2, ...), ...),         ; epoch1
+    #     ((t1, t2, ...), (t1, t2, ...), ...), ...)    ; epoch2
+
+
+def iter_bwd_loss(optim, loss_it):
+    loss_it = tuple(loss_it)
+    for l in loss_it:
+        l.backward()
+    optim.step()
+    optim.zero_grad()
+    return loss_it
 
 
 def triplet_loss(margin, fn_fwd, anchor, pos, neg):
@@ -97,98 +107,48 @@ def triplet_loss(margin, fn_fwd, anchor, pos, neg):
     return torch.clamp(dist(fn_fwd(pos['path'])) - dist(fn_fwd(neg['path'])) + margin, min=0)
 
 
-def mining_stats(acc, mining_stats):
-    util.update('triplets', lambda t: [*t, util.nth(2, mining_stats)], acc)
-    util.update('samples',  lambda _: util.second(mining_stats), acc)
-    return acc
+def im_loss(optim, margin, fn_fwd, tp_it):
+    tp_it   = tuple(tp_it)
+    loss_it = it.starmap(ft.partial(triplet_loss, margin, fn_fwd), tp_it)
+    return sum(map(float, iter_bwd_loss(optim, loss_it)))/len(tp_it)
 
 
-def iter_mined_triplets(n, fn_iter_tps, fn_tp_loss, im_it, rd_it):
-    prepend_loss = lambda i, t: (float(fn_tp_loss(*t)), i, t)
-    def choose_hard(tps_it):
-        with torch.no_grad():
-            samp_it = zip(it.count(1), util.rand_sample(0.1, tps_it))
-            hard_it = util.take(n, filter(util.first, it.starmap(prepend_loss, samp_it)))
-            return ft.reduce(mining_stats, hard_it, {'samples': 0, 'triplets': []})
-    return map(choose_hard, fn_iter_tps(im_it, rd_it))
-
-
-def iter_im_loss(fn_fwd, params, im_it, rd_it):
-    loss  = ft.partial(triplet_loss, params['margin'], fn_fwd)
-    tp_it = iter_mined_triplets(params['n_triplets'],
-        ft.partial(iter_triplets,
-            ft.partial(iter_pos_renders, params['positives']),
-            ft.partial(iter_neg_renders, params['negatives'])), loss, im_it, rd_it)
-    return map(lambda m: {**m, 'loss': sum(it.starmap(loss, m['triplets']))}, tp_it)
+def iter_im_loss(optim, margin, fn_fwd, im_tp_it):
+    return map(ft.partial(im_loss, optim, margin, fn_fwd), im_tp_it)
 
 
 def load_im(device, fpath):
     return T.to_tensor(Image.open(fpath)).unsqueeze(0).to(device)
 
 
-def make_minibatch_stats(stage, logfile, im_it):
-    total_ims = len(im_it)
+def iter_epoch_im_loss(model, params, im_it, rd_it):
+    fwd = util.compose(model['net'], ft.partial(load_im, model['device']))
+    return map(ft.partial(iter_im_loss, model['optim'], params['margin'], fwd),
+        iter_epoch_im_triplets(model['device'], params, fwd, im_it, rd_it))
+
+
+def make_epoch_stats(epoch_idx, im_it):
+    total_ims = len(tuple(im_it))
     avg_imsec = log.make_avg_ims_sec()
     prog_bar  = log.make_progress_bar(bar_width=30, total=total_ims)
-    print(f'{prog_bar(stage, 0, 0, 0)}', end='\r', file=logfile, flush=True)
-    def minibatch_stats(acc, x):
-        i, mined_stats = x
-        speed = avg_imsec(1)
-        loss  = acc['loss'] + mined_stats['loss']
-        samp  = [*acc['samples'], mined_stats['samples']]
-        last  = i == total_ims
-        print(f'\033[K{prog_bar(stage, i, speed, float(loss))}',
-                end='\n' if last else '\r' , file=logfile, flush=True)
-        return {'loss': loss, 'speed': speed, 'samples': st.median(samp) if last else samp}
-    return minibatch_stats
-
-
-def minibatch_stats(model, params, logfile, rd_it, batches_total, batch_id, im_it):
-    im_it = tuple(im_it)
-    zero  = torch.zeros(1, device=model['device'], requires_grad=torch.is_grad_enabled())
-    fwd   = util.compose(model['net'], make_load_im(model['device'], params['input_size']))
-    ls_it = enumerate(iter_im_loss(util.memoize(fwd), params, im_it, rd_it), 1)
-    stats = make_minibatch_stats(f'Batch {log.fmt_fraction(batch_id, batches_total)}', logfile, im_it)
-    return ft.reduce(stats, ls_it, {'loss': zero, 'speed': 0, 'samples': []})
-
-
-def backward(optim, loss):
-    optim.zero_grad()
-    loss.backward()
-    optim.step()
-    return loss
-
-
-def train_on_minibatch(model, *args):
-    with torch.enable_grad():
-        model['net'].train()
-        bwd = util.compose(float, ft.partial(backward, model['optim']))
-        return util.update('loss', bwd, minibatch_stats(model, *args))
-
-
-def eval_minibatch(model, *args):
-    with torch.no_grad():
-        model['net'].eval()
-        return util.update('loss', float, minibatch_stats(model, *args))
-
-
-def make_epoch_stats():
-    ravg_loss = util.make_running_avg()
-    ravg_samp = util.make_running_avg()
-    def epoch_stats(acc, stats):
-        util.update('loss',    lambda _: ravg_loss(stats['loss']), acc)
-        util.update('samples', lambda _: ravg_samp(stats['samples']), acc)
-        util.update('batches', lambda b: [*b, stats], acc)
-        return acc
+    stage     = f'Epoch {epoch_idx}'
+    print(f'{prog_bar(stage, 0, 0, 0)}', end='\r', flush=True)
+    def epoch_stats(acc, x):
+        im_idx, loss = x
+        speed   = avg_imsec(1)
+        loss    = acc['loss'] + loss
+        print(f'\033[K{prog_bar(stage, im_idx, speed, loss)}',
+                end='\n' if total_ims == im_idx else '\r' , flush=True)
+        return {'loss': loss, 'speed': speed}
     return epoch_stats
 
 
-def do_epoch(fn_batch_apply, fn_onstart, epoch, model, params, logfile, im_it, rd_it):
-    fn_onstart(epoch)
-    rd_it    = tuple(rd_it)
-    minib_it = tuple(enumerate(util.partition(params['batch_size'], im_it), 1))
-    do_minib = ft.partial(fn_batch_apply, model, params, logfile, rd_it, len(minib_it))
-    return ft.reduce(make_epoch_stats(), it.starmap(do_minib, minib_it), {'samples': 0, 'loss': 0, 'batches': []})
+def iter_epoch_stats(model, params, im_it, rd_it):
+    im_it = tuple(im_it)
+    def epoch_stat(epoch_idx, im_loss_it):
+        return ft.reduce(make_epoch_stats(epoch_idx, im_it),
+                enumerate(im_loss_it), {'loss': 0, 'speed': 0})
+    return it.starmap(epoch_stat, enumerate(iter_epoch_losses(model, params, im_it, rd_it), 1))
 
 
 def iter_training(model, params, logfile, images):

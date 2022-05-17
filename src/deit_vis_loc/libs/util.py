@@ -109,6 +109,10 @@ def compose(*f):
     return ft.reduce(_compose2, f)
 
 
+def repeatedly(f):
+    return map(lambda _: f(), it.repeat(None))
+
+
 def make_validator(msg, f):
     return lambda *args: (bool(f(*args)), msg)
 
