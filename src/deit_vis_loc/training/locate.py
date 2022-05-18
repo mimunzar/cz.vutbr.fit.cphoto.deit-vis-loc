@@ -131,58 +131,20 @@ def make_epochstat(desc, im_triplet_it):
     return epochstat
 
 
+def epochstat(optim, params, fn_fwd, epoch, im_triplet_it):
+    im_triplet_it = tuple(im_triplet_it)
+    loss_it = map(ft.partial(imloss, optim, params, fn_fwd), im_triplet_it)
+    return ft.reduce(make_epochstat(f'Epoch {epoch}', im_triplet_it), enumerate(loss_it, 1), {})
+
+
 def load_im(device, fpath):
     return T.to_tensor(Image.open(fpath)).unsqueeze(0).to(device)
 
 
-def epochstat(model, params, epoch, im_triplet_it):
-    im_triplet_it = tuple(im_triplet_it)
-    fwd     = util.compose(model['net'], ft.partial(load_im, model['device']))
-    loss_it = map(ft.partial(imloss, model['optim'], params, fwd), im_triplet_it)
-    return ft.reduce(make_epochstat(f'Epoch {epoch}', im_triplet_it), enumerate(loss_it, 1), {})
-
-
-def iter_training(model, params, logfile, images):
-    rd_it       = tuple(images['renders'])
-    t_it, v_it  = map(list,  util.pluck(['train', 'val'], images))
-    train_epoch = ft.partial(do_epoch, train_on_minibatch,
-            lambda e: log.log(f'Training epoch {e}:\n', start='' if 1 == e else '\n', file=logfile))
-    eval_epoch  = ft.partial(do_epoch, eval_minibatch,
-            lambda e: log.log(f'Evaluating epoch {e}:\n', start='\n', file=logfile))
-    def train_and_evaluate_epoch(e):
-        random.shuffle(t_it)
-        random.shuffle(v_it)
-        t = train_epoch(e, model, params, logfile, t_it, rd_it)
-        v = eval_epoch (e, model, params, logfile, v_it, rd_it)
-        return {'epoch': e, 'train': t, 'val': v}
-    return map(train_and_evaluate_epoch, it.count(1))
-
-
-def make_is_learning(patience, min_delta=0.01):
-    q_losses = cl.deque(maxlen=patience + 1)
-    le_delta = lambda l, r: l - r <= min_delta
-    def is_learning(epoch_stats):
-        q_losses.append(epoch_stats['val']['loss'])
-        full_queue = patience < len(q_losses)
-        rest_queue = it.islice(q_losses, 1, len(q_losses))
-        min_first  = all(it.starmap(le_delta, zip(it.repeat(q_losses[0]), rest_queue)))
-        return not (full_queue and min_first)
-    return is_learning
-
-
-def on_epoch_end(logfile, callbacks_it, stats):
-    print('', file=logfile, flush=True)
-    util.dorun(map(lambda s: print(s, file=logfile, flush=True), log.fmt_table([
-        ['',             'Train',                            'Val'],
-        ['Avg. Loss',    f'{stats["train"]["loss"]:.4f}',    f'{stats["val"]["loss"]:.4f}'],
-        ['Avg. Samples', f'{stats["train"]["samples"]:.4f}', f'{stats["val"]["samples"]:.4f}'],
-    ])))
-    util.dorun(map(lambda f: f(stats), callbacks_it))
-    return stats
-
-
-def train(logfile, params, model, images, callbacks_it):
-    train_it = iter_training(model, params, logfile, images)
-    epoch_it = it.takewhile(make_is_learning(params['patience']), util.take(params['max_epochs'], train_it))
-    return min(map(ft.partial(on_epoch_end, logfile, callbacks_it), epoch_it), key=lambda e: e['val']['loss'])
+def train(model, params, im_it, rd_it):
+    fwd = util.compose(model['net'], ft.partial(load_im, model['device']))
+    return util.take(params['max_epochs'],
+            it.starmap(ft.partial(epochstat, model['optim'], params, fwd),
+                enumerate(iter_epoch_im_triplet(model['device'], params, fwd, im_it, rd_it), 1)))
+    # => (stat1, stat2, ...)
 
