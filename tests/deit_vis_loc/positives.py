@@ -11,6 +11,7 @@ import matplotlib.gridspec as mpgrid
 import matplotlib.image as mpimg
 import matplotlib.pyplot as mpplt
 
+import tests.deit_vis_loc.commons as commons
 import src.deit_vis_loc.data.loader as loader
 import src.deit_vis_loc.training.locate as locate
 import src.deit_vis_loc.libs.util as util
@@ -51,25 +52,11 @@ def iter_positives(params, im_it, renders_it):
     return map(lambda im: (im, locate.iter_posrenders(params, im, renders_it)), im_it)
 
 
-PRETRAINING_PARAMS = {
-    'dist_m'      : 0,
-    'dist_tol_m'  : 1,
-    'yaw_deg'     : 0,
-    'yaw_tol_deg' : 1,
-}
-
-SPARSE_PARAMS = {
-    'dist_m'      : 20,
-    'dist_tol_m'  : 1,
-    'yaw_deg'     : 15,
-    'yaw_tol_deg' : 1,
-}
-
 if '__main__' == __name__:
     args          = parse_args(sys.argv[1:])
     data_dir, res = util.pluck(['data_dir', 'resolution'], args)
     im_it         = tuple(loader.iter_queries(data_dir, res, 'train'))
-    result        = it.starmap(iter_plot_positives, iter_positives(SPARSE_PARAMS,
+    result        = it.starmap(iter_plot_positives, iter_positives(commons.SPARSE_PARAMS['positives'],
         random.sample(im_it, k=len(im_it)),
         loader.iter_sparse_renders(data_dir, res, 'segments')))
 

@@ -16,17 +16,17 @@ def test_cosine_dist():
 
 
 def test_triplet_loss():
-    p  = {'path': torch.ones ((1, 2))}
-    n  = {'path': torch.zeros((1, 2))}
+    p  = torch.ones ((1, 2))
+    n  = torch.zeros((1, 2))
 
-    loss = ft.partial(locate.triplet_loss, 0., lambda x: x)
+    loss = ft.partial(locate.triplet_loss, 0.)
     assert loss(p, p, p) == torch.tensor([0.])
     assert loss(p, p, n) == torch.tensor([0.])
     assert loss(p, n, p) == torch.tensor([1.])
     assert loss(p, n, n) == torch.tensor([0.])
     assert loss(n, n, n) == torch.tensor([0.])
 
-    loss = ft.partial(locate.triplet_loss, .5, lambda x: x)
+    loss = ft.partial(locate.triplet_loss, .5)
     assert loss(p, p, p) == torch.tensor([.5])
     assert loss(p, p, n) == torch.tensor([0.])
     assert loss(p, n, n) == torch.tensor([.5])

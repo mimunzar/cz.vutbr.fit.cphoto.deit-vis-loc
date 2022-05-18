@@ -93,6 +93,15 @@ def test_update():
     assert util.update('foo', lambda x: x + 1, {'foo': 42}) == {'foo': 43}
 
 
+def test_assoc():
+    assert util.assoc({})                                 == {}
+    assert util.assoc({}, ('foo', 'bar'))                 == {'foo': 'bar'}
+    assert util.assoc({}, ('foo', 'bar'), ('bax', 'baz')) == {
+        'foo': 'bar',
+        'bax': 'baz'
+    }
+
+
 def test_clamp():
     assert util.clamp(1, 3, 0) == 1
     assert util.clamp(1, 3, 1) == 1

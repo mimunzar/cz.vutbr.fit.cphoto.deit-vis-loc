@@ -84,71 +84,62 @@ def iter_im_triplet(device, params, fn_fwd, im_it, rd_it):
     #     (t1, t2, ...), ...)  ; im2
 
 
-def iter_epoch_im_triplets(device, params, fn_fwd, im_it, rd_it):
+def iter_epoch_im_triplet(device, params, fn_fwd, im_it, rd_it):
     iter_im_tp = ft.partial(iter_im_triplet,
             device, params, fn_fwd, tuple(im_it), tuple(rd_it))
     return util.flatten(util.repeatedly(
-        lambda: util.take(params['mine_every'], it.repeat(tuple(iter_im_tp())))))
+        lambda: util.take(params['mine_every_epoch'], it.repeat(tuple(iter_im_tp())))))
     # => (((t1, t2, ...), (t1, t2, ...), ...),         ; epoch1
     #     ((t1, t2, ...), (t1, t2, ...), ...), ...)    ; epoch2
 
 
-def iter_bwd_loss(optim, loss_it):
-    loss_it = tuple(loss_it)
-    for l in loss_it:
-        l.backward()
-    optim.step()
-    optim.zero_grad()
-    return loss_it
+def triplet_loss(margin, anchor, pos, neg):
+    return N.triplet_margin_with_distance_loss(anchor, pos, neg,
+            margin=margin, distance_function=cosine_dist, reduction='mean')
 
 
-def triplet_loss(margin, fn_fwd, anchor, pos, neg):
-    dist = ft.partial(cosine_dist, fn_fwd(anchor['path']))
-    return torch.clamp(dist(fn_fwd(pos['path'])) - dist(fn_fwd(neg['path'])) + margin, min=0)
+def batchloss(margin, fn_fwd, triplet_it):
+    fwd = util.compose(fn_fwd, ft.partial(util.pluck, ['path']))
+    return triplet_loss(margin, *map(
+        lambda i: torch.cat(tuple(map(fwd, i))), zip(*triplet_it)))
 
 
-def im_loss(optim, margin, fn_fwd, tp_it):
-    tp_it   = tuple(tp_it)
-    loss_it = it.starmap(ft.partial(triplet_loss, margin, fn_fwd), tp_it)
-    return sum(map(float, iter_bwd_loss(optim, loss_it)))/len(tp_it)
+def backward(optim, loss):
+    optim.zero_grad(); loss.backward(); optim.step()
+    return loss.detach()
 
 
-def iter_im_loss(optim, margin, fn_fwd, im_tp_it):
-    return map(ft.partial(im_loss, optim, margin, fn_fwd), im_tp_it)
+def imloss(optim, params, fn_fwd, triplet_it):
+    return sum(map(util.compose(float, ft.partial(backward, optim)),
+                map(ft.partial(batchloss, params['margin'], fn_fwd),
+                    util.partition(params['batch_size'], triplet_it, strict=False))))
+
+
+def make_epochstat(desc, im_triplet_it):
+    total_ims = len(tuple(im_triplet_it))
+    avg_loss  = util.make_running_avg()
+    avg_imsec = log.make_avg_ims_sec()
+    prog_bar  = log.make_progress_bar(bar_width=30, total=total_ims)
+    print(f'{prog_bar(desc, 0, 0, 0)}', end='\r', flush=True)
+    def epochstat(acc, x):
+        i, loss = x
+        speed   = avg_imsec(1)
+        loss    = avg_loss(loss)
+        print(f'\033[K{prog_bar(desc, i, speed, loss)}',
+                end='\n' if total_ims == i else '\r' , flush=True)
+        return util.assoc(acc, ('avgLoss', loss), ('avgSpeed', speed))
+    return epochstat
 
 
 def load_im(device, fpath):
     return T.to_tensor(Image.open(fpath)).unsqueeze(0).to(device)
 
 
-def iter_epoch_im_loss(model, params, im_it, rd_it):
-    fwd = util.compose(model['net'], ft.partial(load_im, model['device']))
-    return map(ft.partial(iter_im_loss, model['optim'], params['margin'], fwd),
-        iter_epoch_im_triplets(model['device'], params, fwd, im_it, rd_it))
-
-
-def make_epoch_stats(epoch_idx, im_it):
-    total_ims = len(tuple(im_it))
-    avg_imsec = log.make_avg_ims_sec()
-    prog_bar  = log.make_progress_bar(bar_width=30, total=total_ims)
-    stage     = f'Epoch {epoch_idx}'
-    print(f'{prog_bar(stage, 0, 0, 0)}', end='\r', flush=True)
-    def epoch_stats(acc, x):
-        im_idx, loss = x
-        speed   = avg_imsec(1)
-        loss    = acc['loss'] + loss
-        print(f'\033[K{prog_bar(stage, im_idx, speed, loss)}',
-                end='\n' if total_ims == im_idx else '\r' , flush=True)
-        return {'loss': loss, 'speed': speed}
-    return epoch_stats
-
-
-def iter_epoch_stats(model, params, im_it, rd_it):
-    im_it = tuple(im_it)
-    def epoch_stat(epoch_idx, im_loss_it):
-        return ft.reduce(make_epoch_stats(epoch_idx, im_it),
-                enumerate(im_loss_it), {'loss': 0, 'speed': 0})
-    return it.starmap(epoch_stat, enumerate(iter_epoch_losses(model, params, im_it, rd_it), 1))
+def epochstat(model, params, epoch, im_triplet_it):
+    im_triplet_it = tuple(im_triplet_it)
+    fwd     = util.compose(model['net'], ft.partial(load_im, model['device']))
+    loss_it = map(ft.partial(imloss, model['optim'], params, fwd), im_triplet_it)
+    return ft.reduce(make_epochstat(f'Epoch {epoch}', im_triplet_it), enumerate(loss_it, 1), {})
 
 
 def iter_training(model, params, logfile, images):

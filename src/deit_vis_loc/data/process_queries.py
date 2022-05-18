@@ -6,7 +6,6 @@ import functools as ft
 import os
 import pickle
 import sys
-from PIL import Image
 
 import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.util as util
@@ -77,7 +76,7 @@ def process_im(resolution, im):
         ft.partial(commons.pad_to_square,     resolution),
         ft.partial(commons.resize_keep_ratio, resolution),
     )
-    return proc_im(Image.open(im))
+    return proc_im(commons.load_im(im))
 
 
 def process_geo_dir(fn_member, resolution, dpath):

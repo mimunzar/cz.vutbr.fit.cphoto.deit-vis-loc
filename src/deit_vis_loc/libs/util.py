@@ -69,8 +69,9 @@ def update(k, f, d):
     return d
 
 
-def assoc(k, v, d):
-    d[k] = v
+def assoc(d, *kv):
+    for k, v in kv:
+        d[k] = v
     return d
 
 
@@ -129,11 +130,11 @@ def epoch_secs():
 
 
 def make_running_avg():
-    idx, ravg = (0, 0)
+    i, avg = (0, 0)
     def running_avg(n):
-        nonlocal idx, ravg
-        idx  = idx + 1
-        ravg = ravg*(idx - 1)/idx + n/idx
-        return ravg
+        nonlocal i, avg
+        i   = i + 1
+        avg = (avg*(i - 1) + n)/i
+        return avg
     return running_avg
 

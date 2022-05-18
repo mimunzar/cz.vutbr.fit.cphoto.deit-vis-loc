@@ -22,7 +22,7 @@ META_NAMES = {
 }
 
 def assign_query_path(im_dir, meta):
-    return util.assoc('path', os.path.join(im_dir, f'{meta["name"]}.jpg'), meta)
+    return util.assoc(meta, ('path', os.path.join(im_dir, f'{meta["name"]}.jpg')))
 
 
 def iter_queries(data_dir, resolution, member):
