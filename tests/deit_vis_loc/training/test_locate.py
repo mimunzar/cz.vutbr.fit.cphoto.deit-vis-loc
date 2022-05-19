@@ -32,24 +32,3 @@ def test_triplet_loss():
     assert loss(p, n, n) == torch.tensor([.5])
     assert loss(n, n, n) == torch.tensor([.5])
 
-
-def test_early_stopping():
-    it_learning = locate.make_is_learning(0, 0)
-    assert it_learning({'val': {'loss': 0}}) == False
-    #^ Not having patience means to stop immediately
-
-    it_learning = locate.make_is_learning(1, .1)
-    assert it_learning({'val': {'loss': 3.00}}) == True
-    assert it_learning({'val': {'loss': 2.91}}) == False
-    #^ Validation loss doesn't decrease more than delta
-
-    it_learning = locate.make_is_learning(2, 0)
-    assert it_learning({'val': {'loss': 3}}) == True
-    assert it_learning({'val': {'loss': 2}}) == True
-    assert it_learning({'val': {'loss': 1}}) == True
-    assert it_learning({'val': {'loss': 2}}) == True
-    assert it_learning({'val': {'loss': 0}}) == True
-    assert it_learning({'val': {'loss': 1}}) == True
-    assert it_learning({'val': {'loss': 2}}) == False
-    #^ Patience over multiple losses
-

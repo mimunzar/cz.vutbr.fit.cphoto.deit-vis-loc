@@ -6,21 +6,22 @@ import src.deit_vis_loc.training.config as config
 
 def test_parse():
     params = {
-        'deit_model' : 'deit_tiny_patch16_224',
-        'input_size' : 224,
-        'margin'     : 0.2,
-        'n_triplets' : 10,
-        'lr'         : 1e-3,
-        'batch_size' : 8,
-        'max_epochs' : 42,
-        'patience'   : 42,
+        'deit_model'       : 'deit_tiny_patch16_224',
+        'input_size'       : 224,
+        'lr'               : 1e-3,
+        'batch_size'       : 5,
+        'margin'           : 0.1,
+        'max_epochs'       : 100,
+        'mine_every_epoch' : 1,
         'positives'  : {
+            'samples'     : 1,
             'dist_m'      : 100,
             'dist_tol_m'  : 10,
             'yaw_deg'     : 15,
             'yaw_tol_deg' : 1,
         },
         'negatives'  : {
+            'samples'    : 5,
             'dist_m'     : 200,
             'dist_tol_m' : 10,
         }

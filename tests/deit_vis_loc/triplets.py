@@ -51,14 +51,17 @@ def iter_plotted_triplets(triplet_it):
 
 
 if '__main__' == __name__:
-    args          = parse_args(sys.argv[1:])
-    data_dir, res = util.pluck(['data_dir', 'resolution'], args)
-    n_im, device  = util.pluck(['n_images', 'device'],     args)
-    params        = {'deit_model': 'deit_tiny_patch16_224', 'input_size': res, **commons.PRETRAINING_PARAMS}
+    args  = parse_args(sys.argv[1:])
+    im_it = random.sample(tuple(
+        loader.iter_queries(args['data_dir'], args['resolution'], 'train')), k=args['n_images'])
+    rd_it = loader.iter_pretraining_renders(args['data_dir'], args['resolution'], 'segments')
 
-    net    = model.load(params['deit_model']).to(device)
-    fwd    = util.compose(net, ft.partial(locate.load_im, device))
-    result = map(iter_plotted_triplets, locate.iter_im_triplet(device, params, fwd,
-        random.sample(tuple(loader.iter_queries(data_dir, res, 'train')), k=args['n_images']),
-        loader.iter_pretraining_renders        (data_dir, res, 'segments')))
+    params = {
+        'deit_model': 'deit_tiny_patch16_224',
+        'input_size': args['resolution'],
+        **commons.PRETRAINING_PARAMS
+    }
+    net    = model.load(params['deit_model']).to(args['device'])
+    fwd    = util.compose(net, ft.partial(locate.load_im, args['device']))
+    result = map(iter_plotted_triplets, locate.iter_im_triplet(args['device'], params, fwd, im_it, rd_it))
 

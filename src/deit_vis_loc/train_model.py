@@ -39,7 +39,7 @@ if '__main__' == __name__:
     with open(args['params'], 'r') as f:
         params = config.parse(json.load(f))
 
-    net  = model.load(params['deit_model']).to(args['device'])
+    net = model.load(params['deit_model']).to(args['device'])
     log.log('Started training')
     util.dorun(locate.train({
             'device' : args['device'],

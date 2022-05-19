@@ -53,10 +53,9 @@ def iter_positives(params, im_it, renders_it):
 
 
 if '__main__' == __name__:
-    args          = parse_args(sys.argv[1:])
-    data_dir, res = util.pluck(['data_dir', 'resolution'], args)
-    im_it         = tuple(loader.iter_queries(data_dir, res, 'train'))
-    result        = it.starmap(iter_plot_positives, iter_positives(commons.SPARSE_PARAMS['positives'],
-        random.sample(im_it, k=len(im_it)),
-        loader.iter_sparse_renders(data_dir, res, 'segments')))
+    args  = parse_args(sys.argv[1:])
+    im_it = tuple(loader.iter_queries (args['data_dir'], args['resolution'], 'train'))
+    rd_it = loader.iter_sparse_renders(args['data_dir'], args['resolution'], 'segments')
+    result = it.starmap(iter_plot_positives,
+        iter_positives(commons.SPARSE_PARAMS['positives'], random.sample(im_it, k=len(im_it)), rd_it))
 

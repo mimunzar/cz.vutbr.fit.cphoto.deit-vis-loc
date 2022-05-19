@@ -133,7 +133,7 @@ def make_epochstat(desc, im_triplet_it):
 
 def epochstat(optim, params, fn_fwd, epoch, im_triplet_it):
     im_triplet_it = tuple(im_triplet_it)
-    loss_it = map(ft.partial(imloss, optim, params, fn_fwd), im_triplet_it)
+    loss_it       = map(ft.partial(imloss, optim, params, fn_fwd), im_triplet_it)
     return ft.reduce(make_epochstat(f'Epoch {epoch}', im_triplet_it), enumerate(loss_it, 1), {})
 
 
