@@ -2,15 +2,15 @@
 
 import pytest
 
-import src.deit_vis_loc.data.process_renders_pretraining as process_renders_pretraining
+import src.deit_vis_loc.data.renders_geopose as renders_geopose
 
 
 def test_parse_line():
     with pytest.raises(Exception):
-        process_renders_pretraining.parse_line([])
+        renders_geopose.parse_line([])
     with pytest.raises(Exception):
-        process_renders_pretraining.parse_line(['foo', 'bar', 'baz'])
-    assert process_renders_pretraining.parse_line([
+        renders_geopose.parse_line(['foo', 'bar', 'baz'])
+    assert renders_geopose.parse_line([
         '0000001',
         '28488116812_f5a57ca0f6_k',
         '46.2173',

@@ -138,3 +138,22 @@ def make_running_avg():
         return avg
     return running_avg
 
+
+def make_ims_sec(fn_epoch_secs=time.time):
+    start = fn_epoch_secs()
+    prev  = 0
+    def ims_sec(now_ims, fn_epoch_secs=time.time):
+        nonlocal start, prev
+        elaps = max(1e-6, fn_epoch_secs() - start)
+        start = start + elaps
+        done  = now_ims - prev
+        prev  = prev + done
+        return done/elaps
+    return ims_sec
+
+
+def make_avg_ims_sec():
+    ims_sec     = make_ims_sec()
+    running_avg = make_running_avg()
+    return lambda n: running_avg(ims_sec(n))
+

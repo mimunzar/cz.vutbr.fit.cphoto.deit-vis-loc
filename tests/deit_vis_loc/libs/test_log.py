@@ -55,18 +55,11 @@ def test_fmt_fraction():
 def test_make_progress_bar():
     f = log.make_progress_bar(bar_width=1, total=1, lwidth=0)
     assert f(stage='Foo', curr=0, speed=0, loss=0) == \
-            'Foo: [ ] 0/1  (0.00 loss, 0.00 im/s)'
+            '            Foo: [ ] 0/1  (0.00 loss, 0.00 im/s)'
     assert f(stage='Foo', curr=1, speed=0.5, loss=0.5) == \
-            'Foo: [#] 1/1  (0.50 loss, 0.50 im/s)'
+            '            Foo: [#] 1/1  (0.50 loss, 0.50 im/s)'
     assert f(stage='FooFoo', curr=1, speed=0.5, loss=0.5) == \
-            'FooFoo: [#] 1/1  (0.50 loss, 0.50 im/s)'
+            '         FooFoo: [#] 1/1  (0.50 loss, 0.50 im/s)'
     assert f(stage='Foo',    curr=1, speed=1000.5, loss=1000.5) == \
-            'Foo: [#] 1/1  (1000.50 loss, 1000.50 im/s)'
-
-
-def test_make_ims_sec():
-    ims_sec = log.make_ims_sec(lambda: 0)
-    assert ims_sec(1, lambda: 1) == 1   # 1 seconds diff
-    assert ims_sec(5, lambda: 6) == 1   # 5 seconds diff
-    assert ims_sec(5, lambda: 6) == 5e6 # 0 seconds diff
+            '            Foo: [#] 1/1  (1000.50 loss, 1000.50 im/s)'
 

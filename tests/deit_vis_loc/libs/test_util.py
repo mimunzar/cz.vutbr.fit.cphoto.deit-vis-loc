@@ -155,3 +155,11 @@ def test_make_running_avg():
     assert ravg(6) == 3
     assert ravg(8) == 4
 
+
+def test_make_ims_sec():
+    ims_sec = util.make_ims_sec(lambda: 0)
+    assert ims_sec(1, lambda: 1) == 1   # 1 im  in 1 second
+    assert ims_sec(3, lambda: 2) == 2   # 2 ims in 1 second
+    assert ims_sec(4, lambda: 4) == 0.5 # 1 im  in 2 seconds
+    assert ims_sec(5, lambda: 4) == 1e6 # 1 im  in 0 seconds
+

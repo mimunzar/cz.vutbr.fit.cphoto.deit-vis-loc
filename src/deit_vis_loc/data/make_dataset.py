@@ -38,15 +38,15 @@ if '__main__' == __name__:
     dataset = args['dataset']
 
     if im_geopose.dataset_exists(**args):
-        log.log(f'Found im dataset at {args["output_dir"]}')
+        print(log.msg(f'Found im dataset at {args["output_dir"]}'))
     else:
-        log.log(f'Creating im dataset at {args["output_dir"]}\n')
+        print(log.msg(f'Creating im dataset at {args["output_dir"]}\n'))
         im_geopose.write_dataset(**args)
         print()
 
     if RENDER_MODULES[dataset].dataset_exists(**args):
-        log.log(f'Found {dataset} renders at {args["output_dir"]}')
+        print(log.msg(f'Found {dataset} renders at {args["output_dir"]}'))
     else:
-        log.log(f'Creating {dataset} renders at {args["output_dir"]}\n')
+        print(log.msg(f'Creating {dataset} renders at {args["output_dir"]}\n'))
         RENDER_MODULES[dataset].write_dataset(**args)
 

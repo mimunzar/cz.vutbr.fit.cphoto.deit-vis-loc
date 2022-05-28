@@ -34,19 +34,30 @@ def parse_args(args_it):
 
 
 if '__main__' == __name__:
-    args   = parse_args(sys.argv[1:])
+    args     = parse_args(sys.argv[1:])
+    data_dir = args['data_dir']
+    device   = args['device']
+    n_images = args['n_images']
 
     with open(args['params'], 'r') as f:
         params = config.parse(json.load(f))
 
-    net = model.load(params['deit_model']).to(args['device'])
-    log.log('Started training')
-    util.dorun(locate.train({
-            'device' : args['device'],
-            'net'    : net,
-            'optim'  : torch.optim.SGD(net.parameters(), params['lr'], momentum=0.9),
-        },
-        params,
-        random.sample(tuple(loader.iter_queries(args['data_dir'], params['input_size'], 'train')), k=args['n_images']),
-        loader.iter_pretraining_renders        (args['data_dir'], params['input_size'], 'segments')))
-    log.log('Finished training')
+    net   = model.load(params['deit_model']).to(device)
+    model = {
+        'net'   : net,
+        'device': device,
+        'net'   : net,
+        'optim' : torch.optim.SGD(net.parameters(), params['lr'], momentum=0.9)
+    }
+    vim_it = random.sample(tuple(
+        loader.iter_queries(data_dir, params['input_size'], 'val')), k=n_images)
+    tim_it = random.sample(tuple(
+        loader.iter_queries(data_dir, params['input_size'], 'train')), k=n_images)
+    rd_it  = loader.iter_pretraining_renders(data_dir, params['input_size'], 'segments')
+
+    print(log.msg('Started training\n'))
+    util.dorun(
+        util.take(params['max_epochs'],
+            locate.iter_training(model, params, vim_it, tim_it, rd_it)))
+    print(log.msg('Finished training', prefix='\n'))
+

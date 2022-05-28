@@ -49,19 +49,23 @@ def iter_plotted_triplets(triplet_it):
     return triplet_it
 
 
-
 if '__main__' == __name__:
-    args  = parse_args(sys.argv[1:])
-    im_it = random.sample(tuple(
-        loader.iter_queries(args['data_dir'], args['resolution'], 'train')), k=args['n_images'])
-    rd_it = loader.iter_pretraining_renders(args['data_dir'], args['resolution'], 'segments')
+    args       = parse_args(sys.argv[1:])
+    data_dir   = args['data_dir']
+    device     = args['device']
+    resolution = args['resolution']
 
     params = {
+        **commons.PRETRAINING_PARAMS,
         'deit_model': 'deit_tiny_patch16_224',
-        'input_size': args['resolution'],
-        **commons.PRETRAINING_PARAMS
+        'input_size': resolution,
     }
-    net    = model.load(params['deit_model']).to(args['device'])
-    fwd    = util.compose(net, ft.partial(locate.load_im, args['device']))
-    result = map(iter_plotted_triplets, locate.iter_im_triplet(args['device'], params, fwd, im_it, rd_it))
+    im_it  = random.sample(tuple(
+        loader.iter_queries(data_dir, resolution, 'train')), k=args['n_images'])
+    rd_it  = loader.iter_pretraining_renders(data_dir, resolution, 'segments')
+
+    fwd    = util.compose(
+            model.load(params['deit_model']).to(device), ft.partial(locate.load_im, device))
+    result = map(iter_plotted_triplets,
+            locate.iter_im_triplet(params, util.memoize_tensor(device, fwd), fwd, rd_it, im_it))
 

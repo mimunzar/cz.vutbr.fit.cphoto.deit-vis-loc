@@ -2,15 +2,15 @@
 
 import pytest
 
-import src.deit_vis_loc.data.process_queries as process_queries
+import src.deit_vis_loc.data.im_geopose as im_geopose
 
 
 def test_parse_meta():
     with pytest.raises(Exception):
-        process_queries.parse_meta('foo', [])
+        im_geopose.parse_meta('foo', [])
     with pytest.raises(Exception):
-        process_queries.parse_meta('foo', ['MANUAL', 'foo'])
-    assert process_queries.parse_meta('foo', [
+        im_geopose.parse_meta('foo', ['MANUAL', 'foo'])
+    assert im_geopose.parse_meta('foo', [
         'MANUAL',
         '0.577994 -0.0274898 0.0177252',
         '46.1766',
