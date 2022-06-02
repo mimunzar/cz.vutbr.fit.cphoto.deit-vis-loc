@@ -143,12 +143,12 @@ def make_running_avg():
     return running_avg
 
 
-def make_ims_sec(fn_epochsec=time.time):
-    start = fn_epochsec()
+def make_ims_sec(fn_fracsec=time.time):
+    start = fn_fracsec()
     prev  = 0
-    def ims_sec(now_ims, fn_epochsec=time.time):
+    def ims_sec(now_ims, fn_fracsec=time.time):
         nonlocal start, prev
-        elaps = max(1e-6, fn_epochsec() - start)
+        elaps = max(1e-6, fn_fracsec() - start)
         start = start + elaps
         done  = now_ims - prev
         prev  = prev + done

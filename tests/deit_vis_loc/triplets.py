@@ -11,7 +11,7 @@ import matplotlib.pyplot as mpplt
 
 import tests.deit_vis_loc.commons as commons
 import src.deit_vis_loc.data.loader as loader
-import src.deit_vis_loc.training.locate as locate
+import src.deit_vis_loc.training.crosslocate as crosslocate
 import src.deit_vis_loc.training.model as model
 import src.deit_vis_loc.libs.util as util
 
@@ -65,7 +65,7 @@ if '__main__' == __name__:
     rd_it  = loader.iter_pretraining_renders(data_dir, resolution, 'segments')
 
     fwd    = util.compose(
-            model.load(params['deit_model']).to(device), ft.partial(locate.load_im, device))
+            model.load(params['deit_model']).to(device), ft.partial(crosslocate.load_im, device))
     result = map(iter_plotted_triplets,
-            locate.iter_im_triplet(params, util.memoize_tensor(device, fwd), fwd, rd_it, im_it))
+            crosslocate.iter_im_triplet(params, util.memoize_tensor(device, fwd), fwd, rd_it, im_it))
 

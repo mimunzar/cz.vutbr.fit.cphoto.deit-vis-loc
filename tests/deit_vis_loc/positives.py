@@ -13,7 +13,7 @@ import matplotlib.pyplot as mpplt
 
 import tests.deit_vis_loc.commons as commons
 import src.deit_vis_loc.data.loader as loader
-import src.deit_vis_loc.training.locate as locate
+import src.deit_vis_loc.training.crosslocate as crosslocate
 import src.deit_vis_loc.libs.util as util
 
 
@@ -49,7 +49,7 @@ def iter_plot_positives(im, renders_it):
 
 def iter_positives(params, im_it, renders_it):
     renders_it = tuple(renders_it)
-    return map(lambda im: (im, locate.iter_posrenders(params, im, renders_it)), im_it)
+    return map(lambda im: (im, crosslocate.iter_posrenders(params, im, renders_it)), im_it)
 
 
 if '__main__' == __name__:

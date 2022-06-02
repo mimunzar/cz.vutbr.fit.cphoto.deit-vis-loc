@@ -53,6 +53,8 @@ def cosine_dist(emb, emb_other):
     return 1 - N.cosine_similarity(emb, emb_other)
 
 
+DIST_PART_SIZE = 1000
+
 def iter_renderdist(fn_fwd, fn_mem_fwd, rd_it, im):
     path = ft.partial(util.pluck, ['path'])
     dist = ft.partial(cosine_dist, fn_fwd(path(im)))
@@ -60,8 +62,8 @@ def iter_renderdist(fn_fwd, fn_mem_fwd, rd_it, im):
         with torch.no_grad():
             e_it = map(util.compose(fn_mem_fwd, path), rd_it)
             return zip(rd_it, dist(torch.cat(tuple(e_it))).cpu())
-    return util.flatten(
-            map(iter_im_render_batch_dist, util.partition(1000, rd_it, strict=False)))
+    return util.flatten(map(iter_im_render_batch_dist,
+        util.partition(DIST_PART_SIZE, rd_it, strict=False)))
     # => ((r1, d1), (r2, d2), ...)
 
 
@@ -166,7 +168,9 @@ def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):
     val_one    = ft.partial(val_one_epoch, params, forward)
     def one_epoch(epoch, trainval_im_triplet_it):
         t, v = trainval_im_triplet_it
-        return {'epoch': epoch, 'train': train_one(epoch, t), 'val': val_one(epoch, v)}
+        return {'epoch' : epoch,
+                'train' : train_one(epoch, t),
+                'val'   : val_one(epoch, v)}
     return it.starmap(one_epoch, enumerate(iter_epoch(vim_it, tim_it, rd_it), 1))
     # => (stat1, stat2, ...)
 

@@ -42,6 +42,6 @@ def fmt_bar(bar_width, total, curr):
 def make_progress_bar(bar_width, total, lwidth=LINE_WIDTH):
     bar = ft.partial(fmt_bar, bar_width, total)
     def progress_bar(stage, curr, speed, loss):
-        return f'{stage:>15}: {bar(curr)}  ({loss:.2f} loss, {speed:.02f} im/s)'.center(lwidth)
+        return f'{stage:>15}: {bar(curr)}  ({loss:.04f} loss, {speed:.02f} im/s)'.center(lwidth)
     return progress_bar
 

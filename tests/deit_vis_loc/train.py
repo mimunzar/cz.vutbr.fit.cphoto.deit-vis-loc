@@ -7,7 +7,7 @@ import torch.optim
 
 import src.deit_vis_loc.libs.util as util
 import src.deit_vis_loc.data.loader as loader
-import src.deit_vis_loc.training.locate as locate
+import src.deit_vis_loc.training.crosslocate as crosslocate
 import src.deit_vis_loc.training.model as model
 import tests.deit_vis_loc.commons as commons
 
@@ -50,5 +50,5 @@ if '__main__' == __name__:
     tim_it = util.take(n_images, loader.iter_queries(data_dir, params['input_size'], 'train'))
     vim_it = util.take(n_images, loader.iter_queries(data_dir, params['input_size'], 'val'))
     rd_it  = loader.iter_pretraining_renders(data_dir, params['input_size'], 'segments')
-    result = locate.iter_trainingepoch(model, params, vim_it, tim_it, rd_it)
+    result = crosslocate.iter_trainingepoch(model, params, vim_it, tim_it, rd_it)
 

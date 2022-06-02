@@ -11,8 +11,8 @@ import src.deit_vis_loc.libs.util as util
 def iter_metafile(im_dir, meta_name):
     with open(os.path.join(im_dir, meta_name), 'rb') as f:
         not_eof  = lambda x: 'EOF' != x
-        unpickle = lambda _: pickle.load(f)
-        yield from it.takewhile(not_eof, map(unpickle, it.repeat(None)))
+        unpickle = ft.partial(pickle.load, f)
+        yield from it.takewhile(not_eof, util.repeatedly(unpickle))
 
 
 META_NAMES = {
