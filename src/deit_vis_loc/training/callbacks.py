@@ -1,70 +1,39 @@
 #!/usr/bin/env python3
 
-import functools as ft
 import os
 
 import torch
 import matplotlib.pyplot as plt
 
-import src.deit_vis_loc.libs.util as util
+
+def make_netsaver(output_dir, net):
+    output_dir = os.path.expanduser(output_dir)
+    net        = net.module if hasattr(net, 'module') else net
+    def netsaver(epochstats):
+        epoch = f'{epochstats["epoch"]:03}'
+        torch.save(net, os.path.join(output_dir, f'net-{epoch}.torch'))
+    return netsaver
 
 
-def make_save_net(nn, prefix, output_dir, **_):
-    def save_net(stats):
-        epoch = f'{stats["epoch"]:03}'
-        torch.save(nn.module, os.path.join(output_dir, f'{prefix}-{epoch}.torch'))
-    return save_net
-
-
-def add_xaxis(iterable):
+def epochaxis(iterable):
     return zip(*enumerate(iterable, 1))
 
 
-def make_plot_batch_loss(prefix, output_dir, **_):
-    t_it  = []
-    pluck = ft.partial(util.pluck, ['loss'])
-    def plot_batch_loss(stats):
-        t_it.extend(map(pluck, stats['train']['batches']))
-        fg, ax = plt.subplots()
-        ax.plot(*add_xaxis(t_it), linewidth=2.5)
-        ax.set_xlabel('Batch')
-        ax.set_ylabel('Loss')
-        fg.savefig(os.path.join(output_dir, f'{prefix}.batch-loss.svg'))
-        plt.close(fg)
-        return t_it
-    return plot_batch_loss
+def make_loss_plotter(output_dir):
+    output_dir = os.path.expanduser(output_dir)
+    tloss_it   = []
+    vloss_it   = []
+    def loss_plotter(stats):
+        tloss_it.append(stats['train']['avg_loss'])
+        vloss_it.append(stats['val']['avg_loss'])
 
-
-def make_plot_epoch_loss(prefix, output_dir, **_):
-    t_it = []
-    v_it = []
-    def plot_epoch_loss(stats):
-        t_it.append(util.pluck(['loss'], stats['train']))
-        v_it.append(util.pluck(['loss'], stats['val']))
         fg, ax = plt.subplots()
-        ax.plot(*add_xaxis(t_it), *add_xaxis(v_it), linewidth=2.5)
+        ax.plot(*epochaxis(tloss_it), *epochaxis(vloss_it), linewidth=2.5)
         ax.set_xlabel('Epoch')
         ax.set_ylabel('Loss')
         ax.legend(['train', 'val'])
-        fg.savefig(os.path.join(output_dir, f'{prefix}.epoch-loss.svg'))
+        fg.savefig(os.path.join(output_dir, f'loss.svg'))
         plt.close(fg)
-        return {'train': t_it, 'val': v_it}
-    return plot_epoch_loss
-
-
-def make_plot_epoch_samples(prefix, output_dir, **_):
-    t_it = []
-    v_it = []
-    def plot_epoch_samples(stats):
-        t_it.append(util.pluck(['samples'], stats['train']))
-        v_it.append(util.pluck(['samples'], stats['val']))
-        fg, ax = plt.subplots()
-        ax.plot(*add_xaxis(t_it), *add_xaxis(v_it), linewidth=2.5)
-        ax.set_xlabel('Epoch')
-        ax.set_ylabel('Samples')
-        ax.legend(['train', 'val'])
-        fg.savefig(os.path.join(output_dir, f'{prefix}.epoch-samples.svg'))
-        plt.close(fg)
-        return {'train': t_it, 'val': v_it}
-    return plot_epoch_samples
+        return {'train': tloss_it, 'val': vloss_it}
+    return loss_plotter
 

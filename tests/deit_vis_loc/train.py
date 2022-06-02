@@ -50,5 +50,5 @@ if '__main__' == __name__:
     tim_it = util.take(n_images, loader.iter_queries(data_dir, params['input_size'], 'train'))
     vim_it = util.take(n_images, loader.iter_queries(data_dir, params['input_size'], 'val'))
     rd_it  = loader.iter_pretraining_renders(data_dir, params['input_size'], 'segments')
-    result = locate.iter_training(model, params, vim_it, tim_it, rd_it)
+    result = locate.iter_trainingepoch(model, params, vim_it, tim_it, rd_it)
 

@@ -12,6 +12,7 @@ from PIL import Image
 import src.deit_vis_loc.libs.util as util
 import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.spherical as spherical
+import src.deit_vis_loc.training.callbacks as callbacks
 
 
 def is_dist_close(limit_m, tol_m, im, render):
@@ -130,7 +131,7 @@ def make_epochstat(label, params, im_triplet_it):
         loss     = avg_loss(batchloss)
         print(f'\033[K{prog_bar(label, im_done, im_speed, loss)}',
             end='\n' if total_im == im_done else '\r', flush=True)
-        return util.assoc(acc, ('avgLoss', loss), ('avgSpeed', im_speed))
+        return util.assoc(acc, ('avg_loss', loss), ('avg_speed', im_speed))
     return epochstat
 
 
@@ -158,14 +159,23 @@ def load_im(device, fpath):
     return T.to_tensor(Image.open(fpath)).unsqueeze(0).to(device)
 
 
-def iter_training(model, params, vim_it, tim_it, rd_it):
+def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):
     forward    = util.compose(model['net'], ft.partial(load_im, model['device']))
     iter_epoch = ft.partial(iter_epoch_trainval_im_triplet, model['device'], params, forward)
     train_one  = ft.partial(train_one_epoch, model['optim'], params, forward)
     val_one    = ft.partial(val_one_epoch, params, forward)
     def one_epoch(epoch, trainval_im_triplet_it):
         t, v = trainval_im_triplet_it
-        return {'train': train_one(epoch, t), 'val': val_one(epoch, v)}
+        return {'epoch': epoch, 'train': train_one(epoch, t), 'val': val_one(epoch, v)}
     return it.starmap(one_epoch, enumerate(iter_epoch(vim_it, tim_it, rd_it), 1))
     # => (stat1, stat2, ...)
+
+
+def train(model, params, output_dir, vim_it, tim_it, rd_it):
+    on_epoch = util.juxt(
+        callbacks.make_netsaver(output_dir, model['net']),
+        callbacks.make_loss_plotter(output_dir))
+    util.dorun(
+        util.take(params['max_epochs'],
+            map(on_epoch, iter_trainingepoch(model, params, vim_it, tim_it, rd_it))))
 

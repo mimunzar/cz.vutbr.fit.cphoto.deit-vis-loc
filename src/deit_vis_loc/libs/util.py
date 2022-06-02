@@ -106,8 +106,12 @@ def _compose2(f, g):
     return lambda *args: f(g(*args))
 
 
-def compose(*f):
-    return ft.reduce(_compose2, f)
+def compose(*f_it):
+    return ft.reduce(_compose2, f_it)
+
+
+def juxt(*f_it):
+    return lambda *args: tuple(map(lambda f: f(*args), f_it))
 
 
 def repeatedly(f):
@@ -139,12 +143,12 @@ def make_running_avg():
     return running_avg
 
 
-def make_ims_sec(fn_epoch_secs=time.time):
-    start = fn_epoch_secs()
+def make_ims_sec(fn_epochsec=time.time):
+    start = fn_epochsec()
     prev  = 0
-    def ims_sec(now_ims, fn_epoch_secs=time.time):
+    def ims_sec(now_ims, fn_epochsec=time.time):
         nonlocal start, prev
-        elaps = max(1e-6, fn_epoch_secs() - start)
+        elaps = max(1e-6, fn_epochsec() - start)
         start = start + elaps
         done  = now_ims - prev
         prev  = prev + done

@@ -119,9 +119,18 @@ def test_complement():
 
 def test_compose():
     assert util.compose(next)(iter([1, 2, 3]))           == 1
-    assert util.compose(next, iter)([1, 2, 3])           == 1
-    assert util.compose(str, next, iter)([1, 2, 3])      == "1"
-    assert util.compose(int, str, next, iter)([1, 2, 3]) == 1
+    assert util.compose(str, next)(iter([1, 2, 3]))      == "1"
+    assert util.compose(int, str, next)(iter([1, 2, 3])) == 1
+    with pytest.raises(TypeError):
+        util.compose(lambda: 'NoArg')('WithArg')
+
+
+def test_juxt():
+    assert util.juxt(next)(iter([1, 2, 3]))              == (1,)
+    assert util.juxt(next, next)(iter([1, 2, 3]))        == (1, 2)
+    assert util.juxt(next, next, tuple)(iter([1, 2, 3])) == (1, 2, (3,))
+    with pytest.raises(TypeError):
+        util.juxt(lambda: 'NoArg')('WithArg')
 
 
 def test_repeatedly():
