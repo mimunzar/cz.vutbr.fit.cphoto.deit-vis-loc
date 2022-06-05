@@ -21,27 +21,30 @@ def fmt_table_col_width(t):
     return map(util.compose(max_len, sel_col), range(n_cols))
 
 
-def fmt_table(t, lwidth=LINE_WIDTH):
+def fmt_table(t, line_width=LINE_WIDTH):
     col_width = tuple(fmt_table_col_width(t))
     fmt_cell  = lambda c, s, w: f'{s:<{w}} |' if 0 == c else f' {s:^{w}} |'
     fmt_row   = lambda r_it: it.starmap(fmt_cell, zip(it.count(), r_it, col_width))
-    return map(util.compose(lambda r: ''.join(r).center(lwidth), fmt_row), t)
+    return map(util.compose(lambda r: ''.join(r).center(line_width), fmt_row), t)
 
 
-def fmt_fraction(n, d):
-    d_len = len(str(d))
-    return f'{n:>{d_len}}/{d}'
+def fmt_fraction(total, curr):
+    max_len = len(str(total))
+    return f'{curr:>{max_len}}/{total}'
 
 
 def fmt_bar(bar_width, total, curr):
     curr = min(curr, total)
-    bar  = ('#'*round(curr/total*bar_width)).ljust(bar_width)
-    return f'[{bar}] {fmt_fraction(curr, total)}'
+    fill = ('#'*round(curr/total*bar_width)).ljust(bar_width)
+    return f'[{fill}]'
 
 
 def make_progress_bar(bar_width, total, lwidth=LINE_WIDTH):
     bar = ft.partial(fmt_bar, bar_width, total)
-    def progress_bar(stage, curr, speed, loss):
-        return f'{stage:>15}: {bar(curr)}  ({loss:.04f} loss, {speed:.02f} im/s)'.center(lwidth)
+    fra = ft.partial(fmt_fraction, total)
+    def progress_bar(label, curr, speed, loss):
+        prog = f'{label:>15}: {bar(curr)} {fra(curr):<15}'
+        stat = f'{loss:.04f} loss, {speed:.02f} im/s'
+        return f'{prog} ({stat})'.center(lwidth)
     return progress_bar
 

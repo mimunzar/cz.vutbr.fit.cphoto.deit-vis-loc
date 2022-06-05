@@ -49,6 +49,12 @@ def iter_plotted_triplets(triplet_it):
     return triplet_it
 
 
+def iter_im_triplet(device, params, fn_fwd, rd_it, im_it):
+    mem_fwd = util.memoize_tensor(device, fn_fwd)
+    return map(util.second,
+            crosslocate.iter_im_localestriplets(params, mem_fwd, rd_it, im_it))
+
+
 if '__main__' == __name__:
     args       = parse_args(sys.argv[1:])
     data_dir   = args['data_dir']
@@ -66,6 +72,5 @@ if '__main__' == __name__:
 
     fwd    = util.compose(
             model.load(params['deit_model']).to(device), ft.partial(crosslocate.load_im, device))
-    result = map(iter_plotted_triplets,
-            crosslocate.iter_im_triplet(params, util.memoize_tensor(device, fwd), fwd, rd_it, im_it))
+    result = map(iter_plotted_triplets, iter_im_triplet(device, params, fwd, rd_it, im_it))
 

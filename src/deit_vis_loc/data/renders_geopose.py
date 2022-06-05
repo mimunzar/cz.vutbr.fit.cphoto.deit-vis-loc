@@ -60,7 +60,7 @@ def process_render(data_dir, resolution, meta):
 
 def print_progress(total, data):
     done, *_ = data
-    prog_str = log.fmt_bar(bar_width=50, total=total, curr=done)
+    prog_str = f'{log.fmt_bar(50, total, done)} {log.fmt_fraction(total, done)}'
     print(prog_str.center(log.LINE_WIDTH), end='\n' if total == done else '\r', flush=True)
 
 

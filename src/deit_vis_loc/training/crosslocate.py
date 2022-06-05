@@ -15,14 +15,20 @@ import src.deit_vis_loc.libs.spherical as spherical
 import src.deit_vis_loc.training.callbacks as callbacks
 
 
+
+def has_positive_in(fn_is_pos, iterable, n):
+    return any(filter(fn_is_pos, util.take(n, iterable)))
+
+
+def locale1_locale100(params, im, rdbydist_it):
+    positive_in = ft.partial(has_positive_in,
+        make_is_posrender(params['positives'], im), tuple(rdbydist_it))
+    return (positive_in(1), positive_in(100))
+
+
 def is_dist_close(limit_m, tol_m, im, render):
     pluck = ft.partial(util.pluck, ['latitude', 'longitude'])
     return spherical.dist_m(pluck(im), pluck(render)) - limit_m <= tol_m
-
-
-def is_yaw_close(limit_rad, tol_rad, im, render):
-    pluck = ft.partial(util.pluck, ['yaw'])
-    return spherical.circle_dist_rad(pluck(im), pluck(render)) - limit_rad <= tol_rad
 
 
 def iter_negrenders(params, im, rd_it):
@@ -36,17 +42,28 @@ def iter_hardnegrenders(params, im, rdbydist_it):
     #^ Hardest negatives have shortest descriptor distances from an image.
 
 
-def iter_posrenders(params, im, rd_it):
+def is_yaw_close(limit_rad, tol_rad, im, render):
+    pluck = ft.partial(util.pluck, ['yaw'])
+    return spherical.circle_dist_rad(pluck(im), pluck(render)) - limit_rad <= tol_rad
+
+
+def make_is_posrender(params, im):
     d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
     y, y_tol = map(ma.radians, util.pluck(['yaw_deg','yaw_tol_deg'], params))
-    return filter(ft.partial(is_dist_close, d, d_tol, im),
-            filter(ft.partial(is_yaw_close, y, y_tol, im), rd_it))
+    return lambda render: \
+        is_yaw_close(y, y_tol, im, render) and is_dist_close(d, d_tol, im, render)
 
 
 def iter_hardposrenders(params, im, rdbydist_it):
     return util.take_last(params['positives']['samples'],
-            iter_posrenders(params['positives'], im, rdbydist_it))
+            filter(make_is_posrender(params['positives'], im), rdbydist_it))
     #^ Hardest positives have longest descriptor distances from an image.
+
+
+def iter_imtriplets(params, im, rdbydist_it):
+    return it.product((im,),
+        iter_hardposrenders(params, im, rdbydist_it),
+        iter_hardnegrenders(params, im, rdbydist_it))
 
 
 def cosine_dist(emb, emb_other):
@@ -55,47 +72,63 @@ def cosine_dist(emb, emb_other):
 
 DIST_PART_SIZE = 1000
 
-def iter_renderdist(fn_fwd, fn_mem_fwd, rd_it, im):
+def iter_renderdist(fn_fwd, rd_it, im):
     path = ft.partial(util.pluck, ['path'])
     dist = ft.partial(cosine_dist, fn_fwd(path(im)))
-    def iter_im_render_batch_dist(rd_it):
+    def iter_batch_renderdist(rd_it):
         with torch.no_grad():
-            e_it = map(util.compose(fn_mem_fwd, path), rd_it)
+            e_it = map(util.compose(fn_fwd, path), rd_it)
             return zip(rd_it, dist(torch.cat(tuple(e_it))).cpu())
-    return util.flatten(map(iter_im_render_batch_dist,
+    return util.flatten(map(iter_batch_renderdist,
         util.partition(DIST_PART_SIZE, rd_it, strict=False)))
-    # => ((r1, d1), (r2, d2), ...)
+    # => ((render1, dist1), (render2, dist2), ...)
 
 
-def iter_imposneg(params, fn_fwd, fn_mem_fwd, rd_it, im):
-    rdd_it      = iter_renderdist(fn_fwd, fn_mem_fwd, rd_it, im)
-    rdbydist_it = tuple(map(util.first, sorted(rdd_it, key=util.second)))
-    return ((im,),
-            tuple(iter_hardposrenders(params, im, rdbydist_it)),
-            tuple(iter_hardnegrenders(params, im, rdbydist_it)))
-    # => ((im,), (p1, p2,...), (n1, n2,...))
+def iter_im_localestriplets(params, fn_fwd, rd_it, im_it):
+    def localetriplets(rd_it, im):
+        rdbydist_it = tuple(map(util.first,
+            sorted(iter_renderdist(fn_fwd, rd_it, im), key=util.second)))
+        triplet_it  = iter_imtriplets(params, im, rdbydist_it)
+        return (locale1_locale100(params, im, rdbydist_it), tuple(triplet_it))
+    return map(ft.partial(localetriplets, tuple(rd_it)), im_it)
+    # => (((locale1, locale2, ...), (triplet1, triplet2, ...)),       ; im1
+    #     ((locale1, locale2, ...), (triplet1, triplet2, ...)), ...)  ; im2..n
 
 
-def iter_im_triplet(params, fn_mem_fwd, fn_fwd, rd_it, im_it):
-    return it.starmap(util.compose(tuple, it.product),
-        map(ft.partial(iter_imposneg, params, fn_fwd, fn_mem_fwd, tuple(rd_it)), im_it))
-    # => ((t1, t2, ...),       ; im1
-    #     (t1, t2, ...), ...)  ; im2
+def recalls_triplets(params, fn_fwd, rd_it, im_it):
+    l_it, t_it = zip(*iter_im_localestriplets(params, fn_fwd, rd_it, im_it))
+    def iter_localerecall(im_locales_it):
+        im_locales_it = tuple(im_locales_it)
+        total_ims     = len(im_locales_it)
+        return map(lambda recall_it: sum(recall_it)/total_ims, zip(*im_locales_it))
+    return (dict(zip(('at_1', 'at_100'), iter_localerecall(l_it))), t_it)
+    # => (recall, ((triplet1, triplet2, ...), (triplet1, triplet2, ...), ...)
+    #              ^im1                       ^im2
 
 
-def iter_trainval_im_triplet(device, params, fn_fwd, vim_it, tim_it, rd_it):
-    iter_tp = ft.partial(iter_im_triplet,
-            params, util.memoize_tensor(device, fn_fwd), fn_fwd, rd_it)
-    return (tuple(iter_tp(tim_it)),
-            tuple(iter_tp(vim_it)))
-    # => (train, val)
+TRAIN_RECALL = None
+VAL_RECALL   = None
+
+def traintriplets_valtriplets(device, params, fn_fwd, vim_it, tim_it, rd_it):
+    global TRAIN_RECALL, VAL_RECALL
+    recalls_triplets_of = ft.partial(recalls_triplets,
+            params, util.memoize_tensor(device, fn_fwd), tuple(rd_it))
+    TRAIN_RECALL, tt_it = recalls_triplets_of(tim_it)
+    VAL_RECALL,   vt_it = recalls_triplets_of(vim_it)
+    print()
+    util.dorun(map(print, log.fmt_table([
+        ['',           'Train',                         'Val'],
+        ['Recall@1',   f'{TRAIN_RECALL["at_1"]:.2%}',   f'{VAL_RECALL["at_1"]:.2%}'],
+        ['Recall@100', f'{TRAIN_RECALL["at_100"]:.2%}', f'{VAL_RECALL["at_100"]:.2%}']])))
+    print()
+    return (tuple(tt_it), tuple(vt_it))
 
 
-def iter_epoch_trainval_im_triplet(device, params, fn_fwd, vim_it, tim_it, rd_it):
-    iter_trainval = ft.partial(iter_trainval_im_triplet,
+def iter_epoch_traintriplets_valtriplets(device, params, fn_fwd, vim_it, tim_it, rd_it):
+    triplets = ft.partial(traintriplets_valtriplets,
             device, params, fn_fwd, tuple(vim_it), tuple(tim_it), tuple(rd_it))
     return util.flatten(util.repeatedly(
-        lambda: util.take(params['mine_every_epoch'], it.repeat(iter_trainval()))))
+        lambda: util.take(params['mine_every_epoch'], it.repeat(triplets()))))
     # => ((train, val),         ; epoch1
     #     (train, val), ...)    ; epoch2
 
@@ -114,7 +147,7 @@ def mean_triplet_loss(margin, fn_fwd, triplet_it):
 def iter_batchloss(params, fn_fwd, im_triplet_it):
     return map(ft.partial(mean_triplet_loss, params['margin'], fn_fwd),
         util.partition(params['batch_size'], util.flatten(im_triplet_it), strict=False))
-    # => (l1, l2, ...)
+    # => (loss1, loss2, ...)
 
 
 def make_epochstat(label, params, im_triplet_it):
@@ -141,7 +174,7 @@ def val_one_epoch(params, fn_fwd, epoch, im_triplet_it):
     with torch.no_grad():
         im_triplet_it = tuple(im_triplet_it)
         return ft.reduce(make_epochstat(f'Val {epoch}', params, im_triplet_it),
-                map(float, iter_batchloss(params, fn_fwd, im_triplet_it)), {})
+                map(float, iter_batchloss(params, fn_fwd, im_triplet_it)), {'recall': VAL_RECALL})
 
 
 def backward(optim, loss):
@@ -154,7 +187,7 @@ def train_one_epoch(optim, params, fn_fwd, epoch, im_triplet_it):
         im_triplet_it = tuple(im_triplet_it)
         return ft.reduce(make_epochstat(f'Epoch {epoch}', params, im_triplet_it),
                 map(util.compose(float, ft.partial(backward, optim)),
-                    iter_batchloss(params, fn_fwd, im_triplet_it)), {})
+                    iter_batchloss(params, fn_fwd, im_triplet_it)), {'recall': TRAIN_RECALL})
 
 
 def load_im(device, fpath):
@@ -163,14 +196,12 @@ def load_im(device, fpath):
 
 def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):
     forward    = util.compose(model['net'], ft.partial(load_im, model['device']))
-    iter_epoch = ft.partial(iter_epoch_trainval_im_triplet, model['device'], params, forward)
-    train_one  = ft.partial(train_one_epoch, model['optim'], params, forward)
-    val_one    = ft.partial(val_one_epoch, params, forward)
+    iter_epoch = ft.partial(iter_epoch_traintriplets_valtriplets, model['device'], params, forward)
     def one_epoch(epoch, trainval_im_triplet_it):
         t, v = trainval_im_triplet_it
         return {'epoch' : epoch,
-                'train' : train_one(epoch, t),
-                'val'   : val_one(epoch, v)}
+                'train' : train_one_epoch(model['optim'], params, forward, epoch, t),
+                'val'   : val_one_epoch(params, forward, epoch, v)}
     return it.starmap(one_epoch, enumerate(iter_epoch(vim_it, tim_it, rd_it), 1))
     # => (stat1, stat2, ...)
 
@@ -178,7 +209,8 @@ def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):
 def train(model, params, output_dir, vim_it, tim_it, rd_it):
     on_epoch = util.juxt(
         callbacks.make_netsaver(output_dir, model['net']),
-        callbacks.make_loss_plotter(output_dir))
+        callbacks.make_loss_plotter(output_dir),
+        callbacks.make_recall_plotter(output_dir, params['mine_every_epoch']))
     util.dorun(
         util.take(params['max_epochs'],
             map(on_epoch, iter_trainingepoch(model, params, vim_it, tim_it, rd_it))))

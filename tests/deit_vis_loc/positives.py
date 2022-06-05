@@ -47,15 +47,16 @@ def iter_plot_positives(im, renders_it):
     return (im, tuple(util.flatten(it.starmap(plot_row, enumerate(util.partition(ncols, renders_it))))))
 
 
-def iter_positives(params, im_it, renders_it):
-    renders_it = tuple(renders_it)
-    return map(lambda im: (im, crosslocate.iter_posrenders(params, im, renders_it)), im_it)
+def iter_im_positives(params, im_it, rd_it):
+    def imposrender(rd_it, im):
+        return (im, filter(crosslocate.make_is_posrender(params, im), rd_it))
+    return map(ft.partial(imposrender, tuple(rd_it)), im_it)
 
 
 if '__main__' == __name__:
     args  = parse_args(sys.argv[1:])
     im_it = tuple(loader.iter_queries (args['data_dir'], args['resolution'], 'train'))
     rd_it = loader.iter_sparse_renders(args['data_dir'], args['resolution'], 'segments')
-    result = it.starmap(iter_plot_positives,
-        iter_positives(commons.SPARSE_PARAMS['positives'], random.sample(im_it, k=len(im_it)), rd_it))
+    result = it.starmap(iter_plot_positives, iter_im_positives(
+        commons.SPARSE_PARAMS['positives'], random.sample(im_it, k=len(im_it)), rd_it))
 
