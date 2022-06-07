@@ -76,7 +76,6 @@ if '__main__' == __name__:
     model = {
         'net'   : net,
         'device': device,
-        'net'   : net,
         'optim' : torch.optim.SGD(net.parameters(), params['lr'], momentum=0.9)
     }
     vim_it = util.take(n_images, loader.iter_queries(data_dir, params['input_size'], 'val'))

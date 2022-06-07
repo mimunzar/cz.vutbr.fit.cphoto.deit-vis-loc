@@ -16,14 +16,12 @@ import src.deit_vis_loc.training.callbacks as callbacks
 
 
 
-def has_positive_in(fn_is_pos, iterable, n):
-    return any(filter(fn_is_pos, util.take(n, iterable)))
-
-
-def locale1_locale100(params, im, rdbydist_it):
-    positive_in = ft.partial(has_positive_in,
-        make_is_posrender(params['positives'], im), tuple(rdbydist_it))
-    return (positive_in(1), positive_in(100))
+def print_recall(trecall_it, vrecall_it):
+    content_it = log.fmt_table([
+        ['',           'Train',                          'Val'],
+        ['Recall@1',   f'{util.first (trecall_it):.2%}', f'{util.first (vrecall_it):.2%}'],
+        ['Recall@100', f'{util.second(trecall_it):.2%}', f'{util.second(vrecall_it):.2%}']])
+    util.dorun(map(print, it.chain([''], content_it, [''])))
 
 
 def is_dist_close(limit_m, tol_m, im, render):
@@ -76,22 +74,34 @@ def cosine_dist(emb, emb_other):
 
 DIST_PART_SIZE = 1000
 
-def iter_renderdist(fn_fwd, rd_it, im):
-    path = ft.partial(util.pluck, ['path'])
-    dist = ft.partial(cosine_dist, fn_fwd(path(im)))
+def iter_renderdist(fn_iter_desc, fn_mem_iter_desc, rd_it, im):
+    stack = util.compose(torch.stack, tuple)
+    dist  = ft.partial(cosine_dist, stack(fn_iter_desc((im,))))
     def iter_batch_renderdist(rd_it):
-        with torch.no_grad():
-            e_it = map(util.compose(fn_fwd, path), rd_it)
-            return zip(rd_it, dist(torch.cat(tuple(e_it))).cpu())
+        rd_it = tuple(rd_it)
+        return zip(rd_it, dist(stack(fn_mem_iter_desc(rd_it))).cpu())
     return util.flatten(map(iter_batch_renderdist,
         util.partition(DIST_PART_SIZE, rd_it, strict=False)))
     # => ((render1, dist1), (render2, dist2), ...)
 
 
-def iter_im_localestriplets(params, fn_fwd, rd_it, im_it):
+def has_positive_in(fn_is_pos, iterable, n):
+    return any(filter(fn_is_pos, util.take(n, iterable)))
+
+
+def locale1_locale100(params, im, rdbydist_it):
+    positive_in = ft.partial(has_positive_in,
+        make_is_posrender(params['positives'], im), tuple(rdbydist_it))
+    return (positive_in(1), positive_in(100))
+
+
+def iter_im_localestriplets(params, fn_iter_desc, fn_mem_iter_desc, rd_it, im_it):
+    iter_rendersbyimdist = util.compose(
+        ft.partial(map, util.first),
+        ft.partial(util.sortby, util.second),
+        ft.partial(iter_renderdist, fn_iter_desc, fn_mem_iter_desc))
     def localetriplets(rd_it, im):
-        rdbydist_it = tuple(map(util.first,
-            sorted(iter_renderdist(fn_fwd, rd_it, im), key=util.second)))
+        rdbydist_it = tuple(iter_rendersbyimdist(rd_it, im))
         triplet_it  = iter_imtriplets(params, im, rdbydist_it)
         return (locale1_locale100(params, im, rdbydist_it), tuple(triplet_it))
     return map(ft.partial(localetriplets, tuple(rd_it)), im_it)
@@ -99,38 +109,59 @@ def iter_im_localestriplets(params, fn_fwd, rd_it, im_it):
     #     ((locale1, locale2, ...), (triplet1, triplet2, ...)), ...)  ; im2..n
 
 
-def recalls_triplets(params, fn_fwd, rd_it, im_it):
-    l_it, t_it = zip(*iter_im_localestriplets(params, fn_fwd, rd_it, im_it))
-    def iter_localerecall(im_locales_it):
-        im_locales_it = tuple(im_locales_it)
-        total_ims     = len(im_locales_it)
-        return map(lambda recall_it: sum(recall_it)/total_ims, zip(*im_locales_it))
-    return (dict(zip(('at_1', 'at_100'), iter_localerecall(l_it))), t_it)
-    # => (recall, ((triplet1, triplet2, ...), (triplet1, triplet2, ...), ...)
-    #              ^im1                       ^im2
+def recalls_imtriplets(params, fn_iter_desc, fn_mem_iter_desc, rd_it, im_it):
+    im_locales_it, im_triplets_it = zip(*
+        iter_im_localestriplets(params, fn_iter_desc, fn_mem_iter_desc, rd_it, im_it))
+    def locale_to_recall(locale_it):
+        locale_it = tuple(locale_it)
+        return sum(locale_it)/len(locale_it)
+    return (tuple(map(locale_to_recall, zip(*im_locales_it))), im_triplets_it)
+    # => ((recall1, recall100), ((triplet1, triplet2, ...), (triplet1, triplet2, ...), ...)
+    #                            ^im1                       ^im2
 
 
-TRAIN_RECALL = None
-VAL_RECALL   = None
-
-def traintriplets_valtriplets(device, params, fn_fwd, vim_it, tim_it, rd_it):
-    global TRAIN_RECALL, VAL_RECALL
-    recalls_triplets_of = ft.partial(recalls_triplets,
-            params, util.memoize_tensor(device, fn_fwd), tuple(rd_it))
-    TRAIN_RECALL, tt_it = recalls_triplets_of(tim_it)
-    VAL_RECALL,   vt_it = recalls_triplets_of(vim_it)
-    print()
-    util.dorun(map(print, log.fmt_table([
-        ['',           'Train',                         'Val'],
-        ['Recall@1',   f'{TRAIN_RECALL["at_1"]:.2%}',   f'{VAL_RECALL["at_1"]:.2%}'],
-        ['Recall@100', f'{TRAIN_RECALL["at_100"]:.2%}', f'{VAL_RECALL["at_100"]:.2%}']])))
-    print()
-    return (tuple(tt_it), tuple(vt_it))
+def make_mem_iter_desc(fn_iter_desc, im_it):
+    im_it      = tuple(im_it)
+    iter_path  = ft.partial(map, ft.partial(util.pluck, ['path']))
+    desc_cache = dict(zip(iter_path(im_it), fn_iter_desc(im_it)))
+    def mem_iter_desc(im_it):
+        yield from util.pluck(iter_path(im_it), desc_cache)
+        # => (desc1, desc2, ...)
+    return mem_iter_desc
 
 
-def iter_epoch_traintriplets_valtriplets(device, params, fn_fwd, vim_it, tim_it, rd_it):
-    triplets = ft.partial(traintriplets_valtriplets,
-            device, params, fn_fwd, tuple(vim_it), tuple(tim_it), tuple(rd_it))
+def iter_desc(gpu_imcap, model, im_it):
+    net, dev    = util.pluck(['net', 'device'], model)
+    stack       = util.compose(torch.stack, tuple)
+    iter_tensor = ft.partial(map, util.compose(
+        T.to_tensor, Image.open, ft.partial(util.pluck, ['path'])))
+    def iter_batch_desc(im_it):
+        return net(stack(iter_tensor(im_it)).to(dev))
+    return util.flatten(map(iter_batch_desc,
+        util.partition(gpu_imcap, im_it, strict=False)))
+    # => (desc1, desc2, ...)
+
+
+TRN_RECALL = None
+VAL_RECALL = None
+
+def epoch_feed(model, params, vim_it, tim_it, rd_it):
+    global TRN_RECALL, VAL_RECALL
+    rd_it = tuple(rd_it)
+    with torch.no_grad():
+        model['net'].eval()
+        iter_dsc = ft.partial(iter_desc, params['gpu_imcap'], model)
+        rcl_trp  = ft.partial(recalls_imtriplets, params,
+                iter_dsc, make_mem_iter_desc(iter_dsc, rd_it), rd_it)
+        TRN_RECALL, trn_trp_it = rcl_trp(tim_it)
+        VAL_RECALL, val_trp_it = rcl_trp(vim_it)
+        print_recall(TRN_RECALL, VAL_RECALL)
+        return (tuple(trn_trp_it), tuple(val_trp_it))
+
+
+def iter_epoch_feed(model, params, vim_it, tim_it, rd_it):
+    triplets = ft.partial(epoch_feed, model,
+            params, tuple(vim_it), tuple(tim_it), tuple(rd_it))
     return util.flatten(util.repeatedly(
         lambda: util.take(params['mine_every_epoch'], it.repeat(triplets()))))
     # => ((train, val),         ; epoch1
@@ -142,14 +173,13 @@ def triplet_loss(margin, anchor, pos, neg):
             pos, neg, margin=margin, distance_function=cosine_dist)
 
 
-def mean_triplet_loss(margin, fn_fwd, triplet_it):
-    fwd = util.compose(fn_fwd, ft.partial(util.pluck, ['path']))
-    return triplet_loss(margin, *map(
-        lambda i: torch.cat(tuple(map(fwd, i))), zip(*triplet_it))).mean()
+def mean_triplet_loss(margin, fn_iter_desc, triplet_it):
+    stack_desc = util.compose(torch.stack, tuple, fn_iter_desc)
+    return triplet_loss(margin, *map(stack_desc, zip(*triplet_it))).mean()
 
 
-def iter_batchloss(params, fn_fwd, im_triplet_it):
-    return map(ft.partial(mean_triplet_loss, params['margin'], fn_fwd),
+def iter_batchloss(params, fn_iter_desc, im_triplet_it):
+    return map(ft.partial(mean_triplet_loss, params['margin'], fn_iter_desc),
         util.partition(params['batch_size'], util.flatten(im_triplet_it), strict=False))
     # => (loss1, loss2, ...)
 
@@ -174,11 +204,14 @@ def make_epochstat(label, params, im_triplet_it):
     return epochstat
 
 
-def val_one_epoch(params, fn_fwd, epoch, im_triplet_it):
+def val_one_epoch(model, params, epoch, im_triplet_it):
+    im_triplet_it = tuple(im_triplet_it)
+    iter_dsc      = ft.partial(iter_desc, params['gpu_imcap'], model)
     with torch.no_grad():
-        im_triplet_it = tuple(im_triplet_it)
+        model['net'].eval()
         return ft.reduce(make_epochstat(f'Val {epoch}', params, im_triplet_it),
-                map(float, iter_batchloss(params, fn_fwd, im_triplet_it)), {'recall': VAL_RECALL})
+                map(float, iter_batchloss(params, iter_dsc, im_triplet_it)),
+                {'recall': VAL_RECALL})
 
 
 def backward(optim, loss):
@@ -186,26 +219,24 @@ def backward(optim, loss):
     return loss.detach()
 
 
-def train_one_epoch(optim, params, fn_fwd, epoch, im_triplet_it):
+def train_one_epoch(model, params, epoch, im_triplet_it):
+    im_triplet_it = tuple(im_triplet_it)
+    iter_dsc      = ft.partial(iter_desc, params['gpu_imcap'], model)
     with torch.enable_grad():
-        im_triplet_it = tuple(im_triplet_it)
+        model['net'].train()
         return ft.reduce(make_epochstat(f'Epoch {epoch}', params, im_triplet_it),
-                map(util.compose(float, ft.partial(backward, optim)),
-                    iter_batchloss(params, fn_fwd, im_triplet_it)), {'recall': TRAIN_RECALL})
-
-
-def load_im(device, fpath):
-    return T.to_tensor(Image.open(fpath)).unsqueeze(0).to(device)
+                map(util.compose(float, ft.partial(backward, model['optim'])),
+                    iter_batchloss(params, iter_dsc, im_triplet_it)),
+                {'recall': TRN_RECALL})
 
 
 def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):
-    forward    = util.compose(model['net'], ft.partial(load_im, model['device']))
-    iter_epoch = ft.partial(iter_epoch_traintriplets_valtriplets, model['device'], params, forward)
+    iter_epoch = ft.partial(iter_epoch_feed, model, params)
+    train_one  = ft.partial(train_one_epoch, model, params)
+    val_one    = ft.partial(val_one_epoch,   model, params)
     def one_epoch(epoch, trainval_im_triplet_it):
         t, v = trainval_im_triplet_it
-        return {'epoch' : epoch,
-                'train' : train_one_epoch(model['optim'], params, forward, epoch, t),
-                'val'   : val_one_epoch(params, forward, epoch, v)}
+        return {'epoch': epoch, 'train': train_one(epoch, t), 'val': val_one(epoch, v)}
     return it.starmap(one_epoch, enumerate(iter_epoch(vim_it, tim_it, rd_it), 1))
     # => (stat1, stat2, ...)
 

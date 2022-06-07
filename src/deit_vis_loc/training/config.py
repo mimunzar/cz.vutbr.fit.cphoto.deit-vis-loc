@@ -31,6 +31,7 @@ NEG_VALIDATORS = {
 VALIDATORS = {
     'batch_size'       : util.make_validator('batch_size must be a positive int', IS_POS_INT),
     'deit_model'       : util.make_validator('deit_model must be a non-blank', IS_NONBLANK),
+    'gpu_imcap'        : util.make_validator('gpu_imcap must be a positive int', IS_POS_INT),
     'input_size'       : util.make_validator('input resolution must be a positive int', IS_POS_INT),
     'max_epochs'       : util.make_validator('max_epochs must be a positive int', IS_POS_INT),
     'margin'           : util.make_validator('margin must be positive', IS_POS),

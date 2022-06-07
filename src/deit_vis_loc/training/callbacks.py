@@ -55,8 +55,8 @@ def make_loss_plotter(outdir):
 def plot_recall_on_axis(ax, trecall_it, vrecall_it, mine_nth_epoch):
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Recall [%]')
-    iter_r1   = ft.partial(map, ft.partial(util.pluck, ['at_1']))
-    iter_r100 = ft.partial(map, ft.partial(util.pluck, ['at_100']))
+    iter_r1   = ft.partial(map, util.first)
+    iter_r100 = ft.partial(map, util.second)
     ax.plot(*iter_prependaxis(iter_r1(trecall_it), mine_nth_epoch),
             color=TRAIN_COLOR, linewidth=LINE_WIDTH)
     ax.plot(*iter_prependaxis(iter_r100(trecall_it), mine_nth_epoch),
@@ -73,16 +73,15 @@ def is_miningepoch(epoch, mine_nth_epoch):
 
 
 def make_recall_plotter(outdir, mine_nth_epoch):
-    outpath    = os.path.join(os.path.expanduser(outdir), 'recall.svg')
-    trecalls   = []
-    vrecalls   = []
-    iter_vperc = ft.partial(it.starmap, lambda x, y: (x, y*100))
+    outpath   = os.path.join(os.path.expanduser(outdir), 'recall.svg')
+    trecalls  = []
+    vrecalls  = []
+    iter_perc = ft.partial(map, lambda x: x*100)
     def recall_plotter(stats):
         if not is_miningepoch(stats['epoch'], mine_nth_epoch):
             return {'train': trecalls, 'val': vrecalls}
-
-        trecalls.append(dict(iter_vperc(stats['train']['recall'].items())))
-        vrecalls.append(dict(iter_vperc(stats['val']['recall']  .items())))
+        trecalls.append(tuple(iter_perc(stats['train']['recall'])))
+        vrecalls.append(tuple(iter_perc(stats['val']['recall'])))
 
         fg, ax = plt.subplots()
         plot_recall_on_axis(ax, trecalls, vrecalls, mine_nth_epoch)

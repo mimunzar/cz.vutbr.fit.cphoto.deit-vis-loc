@@ -60,6 +60,10 @@ def rand_sample(prob, iterable, fn_rand=random.random):
     return filter(lambda _: fn_rand() < prob, iterable)
 
 
+def sortby(f, iterable):
+    return sorted(iterable, key=f)
+
+
 def pluck(iterable, d):
     return op.itemgetter(*iterable)(d)
 

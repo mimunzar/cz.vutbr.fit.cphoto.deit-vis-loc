@@ -40,6 +40,7 @@ if '__main__' == __name__:
         'lr'               : 1e-3,
         'batch_size'       : 5,
         'mine_every_epoch' : 2,
+        'gpu_imcap'        : 100,
     }
     net   = model.load(params['deit_model']).to(device)
     model = {

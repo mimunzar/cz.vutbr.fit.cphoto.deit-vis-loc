@@ -8,6 +8,7 @@ import sys
 
 import matplotlib.image as mpimg
 import matplotlib.pyplot as mpplt
+import torch
 
 import tests.deit_vis_loc.commons as commons
 import src.deit_vis_loc.data.loader as loader
@@ -49,10 +50,13 @@ def iter_plotted_triplets(triplet_it):
     return triplet_it
 
 
-def iter_im_triplet(device, params, fn_fwd, rd_it, im_it):
-    mem_fwd = util.memoize_tensor(device, fn_fwd)
-    return map(util.second,
-            crosslocate.iter_im_localestriplets(params, mem_fwd, rd_it, im_it))
+def iter_im_triplet(model, params, rd_it, im_it):
+    rd_it   = tuple(rd_it)
+    iter_d  = ft.partial(crosslocate.iter_desc, params['gpu_imcap'], model)
+    with torch.no_grad():
+        iter_loc_trp = ft.partial(crosslocate.iter_im_localestriplets,
+                params, iter_d, crosslocate.make_mem_iter_desc(iter_d, rd_it))
+        yield from map(util.second, iter_loc_trp(rd_it, im_it))
 
 
 if '__main__' == __name__:
@@ -65,12 +69,11 @@ if '__main__' == __name__:
         **commons.PRETRAINING_PARAMS,
         'deit_model': 'deit_tiny_patch16_224',
         'input_size': resolution,
+        'gpu_imcap' : 100,
     }
     im_it  = random.sample(tuple(
         loader.iter_queries(data_dir, resolution, 'train')), k=args['n_images'])
     rd_it  = loader.iter_pretraining_renders(data_dir, resolution, 'segments')
-
-    fwd    = util.compose(
-            model.load(params['deit_model']).to(device), ft.partial(crosslocate.load_im, device))
-    result = map(iter_plotted_triplets, iter_im_triplet(device, params, fwd, rd_it, im_it))
+    model  = {'net': model.load(params['deit_model']).to(device), 'device': device}
+    result = map(iter_plotted_triplets, iter_im_triplet(model, params, rd_it, im_it))
 

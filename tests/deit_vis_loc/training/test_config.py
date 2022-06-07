@@ -13,6 +13,7 @@ def test_parse():
         'margin'           : 0.1,
         'max_epochs'       : 100,
         'mine_every_epoch' : 1,
+        'gpu_imcap'        : 100,
         'positives'  : {
             'samples'     : 1,
             'dist_m'      : 100,
