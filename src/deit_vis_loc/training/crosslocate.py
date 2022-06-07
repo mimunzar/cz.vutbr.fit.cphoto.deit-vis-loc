@@ -39,7 +39,9 @@ def iter_negrenders(params, im, rd_it):
 def iter_hardnegrenders(params, im, rdbydist_it):
     return util.take(params['negatives']['samples'],
             iter_negrenders(params['negatives'], im, rdbydist_it))
-    #^ Hardest negatives have shortest descriptor distances from an image.
+    #^ Take hard negatives with low descriptor distance from an image. A hard
+    # negative is ordered closer to its query image. We want to avoid for the
+    # network to recall any negatives before a positive.
 
 
 def is_yaw_close(limit_rad, tol_rad, im, render):
@@ -48,21 +50,23 @@ def is_yaw_close(limit_rad, tol_rad, im, render):
 
 
 def make_is_posrender(params, im):
-    d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
-    y, y_tol = map(ma.radians, util.pluck(['yaw_deg','yaw_tol_deg'], params))
-    return lambda render: \
-        is_yaw_close(y, y_tol, im, render) and is_dist_close(d, d_tol, im, render)
+    dist_close = ft.partial(is_dist_close, *util.pluck(['dist_m', 'dist_tol_m'], params))
+    yaw_close  = ft.partial(is_yaw_close,  *map(
+        ma.radians, util.pluck(['yaw_deg','yaw_tol_deg'], params)))
+    return lambda render: yaw_close(im, render) and dist_close(im, render)
 
 
-def iter_hardposrenders(params, im, rdbydist_it):
-    return util.take_last(params['positives']['samples'],
+def iter_easyposrenders(params, im, rdbydist_it):
+    return util.take(params['positives']['samples'],
             filter(make_is_posrender(params['positives'], im), rdbydist_it))
-    #^ Hardest positives have longest descriptor distances from an image.
+    #^ Take easy positives with low descriptor distances from an image. A hard
+    # positive may not resemble its query image due to various obstacles or
+    # faulty GPS information.
 
 
 def iter_imtriplets(params, im, rdbydist_it):
     return it.product((im,),
-        iter_hardposrenders(params, im, rdbydist_it),
+        iter_easyposrenders(params, im, rdbydist_it),
         iter_hardnegrenders(params, im, rdbydist_it))
 
 
