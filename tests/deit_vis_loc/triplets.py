@@ -74,6 +74,6 @@ if '__main__' == __name__:
     im_it  = random.sample(tuple(
         loader.iter_queries(data_dir, resolution, 'train')), k=args['n_images'])
     rd_it  = loader.iter_pretraining_renders(data_dir, resolution, 'segments')
-    model  = {'net': model.load(params['deit_model']).to(device), 'device': device}
+    model  = {'net': model.new(params['deit_model']).to(device), 'device': device}
     result = map(iter_plotted_triplets, iter_im_triplet(model, params, rd_it, im_it))
 

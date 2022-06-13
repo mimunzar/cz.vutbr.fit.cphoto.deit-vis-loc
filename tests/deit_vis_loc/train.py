@@ -42,7 +42,7 @@ if '__main__' == __name__:
         'mine_every_epoch' : 2,
         'gpu_imcap'        : 100,
     }
-    net   = model.load(params['deit_model']).to(device)
+    net   = model.new(params['deit_model']).to(device)
     model = {
         'device': device,
         'net'   : net,

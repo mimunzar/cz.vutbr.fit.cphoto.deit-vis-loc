@@ -72,7 +72,7 @@ if '__main__' == __name__:
     with open(os.path.join(out_dir, 'params.json'), 'w') as f:
         json.dump(params, f, indent=4)
 
-    net   = model.load(params['deit_model']).to(device)
+    net   = model.new(params['deit_model']).to(device)
     model = {
         'net'   : net,
         'device': device,

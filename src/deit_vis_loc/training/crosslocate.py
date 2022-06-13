@@ -25,13 +25,16 @@ def print_recall(trecall_it, vrecall_it):
 
 
 def is_dist_close(limit_m, tol_m, im, render):
-    pluck = ft.partial(util.pluck, ['latitude', 'longitude'])
-    return spherical.dist_m(pluck(im), pluck(render)) - limit_m <= tol_m
+    latlon = ft.partial(util.pluck, ['latitude', 'longitude'])
+    return spherical.dist_m(latlon(im), latlon(render)) - limit_m <= tol_m
 
 
 def iter_negrenders(params, im, rd_it):
     d, d_tol = util.pluck(['dist_m', 'dist_tol_m'], params)
     return filter(util.complement(ft.partial(is_dist_close, d, d_tol, im)), rd_it)
+    #^ Renders are considered as negatives only when they lie distant after a
+    # certain threshold. This forces the method to learn local features rather
+    # than distant landmarks. This is different from how humans do it.
 
 
 def iter_hardnegrenders(params, im, rdbydist_it):
@@ -43,8 +46,8 @@ def iter_hardnegrenders(params, im, rdbydist_it):
 
 
 def is_yaw_close(limit_rad, tol_rad, im, render):
-    pluck = ft.partial(util.pluck, ['yaw'])
-    return spherical.circle_dist_rad(pluck(im), pluck(render)) - limit_rad <= tol_rad
+    yaw = ft.partial(util.pluck, ['yaw'])
+    return spherical.circle_dist_rad(yaw(im), yaw(render)) - limit_rad <= tol_rad
 
 
 def make_is_posrender(params, im):
@@ -79,20 +82,19 @@ def iter_renderdist(fn_iter_desc, fn_mem_iter_desc, rd_it, im):
     dist  = ft.partial(cosine_dist, stack(fn_iter_desc((im,))))
     def iter_batch_renderdist(rd_it):
         rd_it = tuple(rd_it)
-        return zip(rd_it, dist(stack(fn_mem_iter_desc(rd_it))).cpu())
+        return zip(rd_it, dist(stack(fn_mem_iter_desc(rd_it))))
     return util.flatten(map(iter_batch_renderdist,
         util.partition(DIST_PART_SIZE, rd_it, strict=False)))
     # => ((render1, dist1), (render2, dist2), ...)
 
 
-def has_positive_in(fn_is_pos, iterable, n):
-    return any(filter(fn_is_pos, util.take(n, iterable)))
-
-
 def locale1_locale100(params, im, rdbydist_it):
-    positive_in = ft.partial(has_positive_in,
-        make_is_posrender(params['positives'], im), tuple(rdbydist_it))
-    return (positive_in(1), positive_in(100))
+    rdbydist_it = tuple(rdbydist_it)
+    positive_in = util.compose(
+        any, ft.partial(filter, make_is_posrender(params['positives'], im)))
+    return (positive_in(util.take(1,   rdbydist_it)),
+            positive_in(util.take(100, rdbydist_it)))
+    # => (locale1, locale100)
 
 
 def iter_im_localestriplets(params, fn_iter_desc, fn_mem_iter_desc, rd_it, im_it):
@@ -131,12 +133,12 @@ def make_mem_iter_desc(fn_iter_desc, im_it):
 
 
 def iter_desc(gpu_imcap, model, im_it):
-    net, dev    = util.pluck(['net', 'device'], model)
+    net, device = util.pluck(['net', 'device'], model)
     stack       = util.compose(torch.stack, tuple)
     iter_tensor = ft.partial(map, util.compose(
         T.to_tensor, Image.open, ft.partial(util.pluck, ['path'])))
     def iter_batch_desc(im_it):
-        return net(stack(iter_tensor(im_it)).to(dev))
+        return net(stack(iter_tensor(im_it)).to(device))
     return util.flatten(map(iter_batch_desc,
         util.partition(gpu_imcap, im_it, strict=False)))
     # => (desc1, desc2, ...)
