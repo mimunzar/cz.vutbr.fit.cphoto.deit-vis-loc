@@ -6,14 +6,11 @@ import src.deit_vis_loc.training.config as config
 
 def test_parse():
     params = {
-        'deit_model'       : 'deit_tiny_patch16_224',
-        'input_size'       : 224,
         'lr'               : 1e-3,
         'batch_size'       : 5,
         'margin'           : 0.1,
         'max_epochs'       : 100,
         'mine_every_epoch' : 1,
-        'gpu_imcap'        : 100,
         'positives'  : {
             'samples'     : 1,
             'dist_m'      : 100,
@@ -39,7 +36,7 @@ def test_parse():
     with pytest.raises(ValueError): config.parse(inv_params)
 
     inv_params = {**params}
-    inv_params['deit_model'] = ''
+    inv_params['lr'] = None
     with pytest.raises(ValueError): config.parse(inv_params)
 
     inv_params = {**params}

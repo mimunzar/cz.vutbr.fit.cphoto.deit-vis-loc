@@ -152,7 +152,7 @@ def epoch_feed(model, params, vim_it, tim_it, rd_it):
     rd_it = tuple(rd_it)
     with torch.no_grad():
         model['net'].eval()
-        iter_dsc = ft.partial(iter_desc, params['gpu_imcap'], model)
+        iter_dsc = ft.partial(iter_desc, model['gpu_imcap'], model)
         rcl_trp  = ft.partial(recalls_imtriplets, params,
                 iter_dsc, make_mem_iter_desc(iter_dsc, rd_it), rd_it)
         TRN_RECALL, trn_trp_it = rcl_trp(tim_it)
@@ -208,7 +208,7 @@ def make_epochstat(label, params, im_triplet_it):
 
 def val_one_epoch(model, params, epoch, im_triplet_it):
     im_triplet_it = tuple(im_triplet_it)
-    iter_dsc      = ft.partial(iter_desc, params['gpu_imcap'], model)
+    iter_dsc      = ft.partial(iter_desc, model['gpu_imcap'], model)
     with torch.no_grad():
         model['net'].eval()
         return ft.reduce(make_epochstat(f'Val {epoch}', params, im_triplet_it),
@@ -223,7 +223,7 @@ def backward(optim, loss):
 
 def train_one_epoch(model, params, epoch, im_triplet_it):
     im_triplet_it = tuple(im_triplet_it)
-    iter_dsc      = ft.partial(iter_desc, params['gpu_imcap'], model)
+    iter_dsc      = ft.partial(iter_desc, model['gpu_imcap'], model)
     with torch.enable_grad():
         model['net'].train()
         return ft.reduce(make_epochstat(f'Epoch {epoch}', params, im_triplet_it),

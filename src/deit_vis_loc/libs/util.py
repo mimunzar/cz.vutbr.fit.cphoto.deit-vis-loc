@@ -5,7 +5,7 @@ import functools as ft
 import itertools as it
 import operator as op
 import random
-import time
+from time import time
 
 
 def partition(n, iterable, strict=True):
@@ -133,10 +133,6 @@ def make_checker(validators):
     return check_dict
 
 
-def epoch_secs():
-    return int(time.time())
-
-
 def make_running_avg():
     i, avg = (0, 0)
     def running_avg(n):
@@ -147,10 +143,10 @@ def make_running_avg():
     return running_avg
 
 
-def make_ims_sec(fn_fracsec=time.time):
+def make_ims_sec(fn_fracsec=time):
     start = fn_fracsec()
     prev  = 0
-    def ims_sec(now_ims, fn_fracsec=time.time):
+    def ims_sec(now_ims, fn_fracsec=time):
         nonlocal start, prev
         elaps = max(1e-6, fn_fracsec() - start)
         start = start + elaps
