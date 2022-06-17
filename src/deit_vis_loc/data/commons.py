@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import re
-from PIL import Image, ImageOps
+from PIL import Image
 
 
 def parse_into(ordt, csv_it):
@@ -26,16 +26,14 @@ def iter_csv_file(fn_parse_line, fpath):
 
 
 def pad_to_square(res, im):
-    n_im = Image.new('RGB', (res, res))
-    n_im.paste(im.convert('RGB'), [(res - x)//2 for x in im.size])
+    n_im    = Image.new('RGB', (res, res))
+    x_coord = (res - im.size[0])//2
+    y_coord = (res - im.size[1])//2
+    n_im.paste(im.convert('RGB'), (x_coord, y_coord))
     return n_im
 
 
 def resize_keep_ratio(res, im):
     ratio = res/max(im.size)
     return im.resize([int(ratio*x) for x in im.size], Image.BICUBIC)
-
-
-def load_im(fpath):
-    return ImageOps.exif_transpose(Image.open(fpath))
 

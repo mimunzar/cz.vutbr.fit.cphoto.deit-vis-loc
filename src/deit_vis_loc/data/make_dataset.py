@@ -9,6 +9,11 @@ import src.deit_vis_loc.data.renders_geopose_panoramas as renders_geopose_panora
 import src.deit_vis_loc.libs.log as log
 
 
+RENDER_MODULES = {
+    'pretraining' : renders_geopose,
+    'sparse'      : renders_geopose_panoramas,
+}
+
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
     parser.add_argument('--geopose-dir', help='The path to Geopose dataset',
@@ -23,15 +28,10 @@ def parse_args(args_it):
             required=True, choices=['segments', 'silhouettes', 'depth'])
     parser.add_argument('--n-images',    help='The number of images in dataset',
             required=False, type=int, default=None, metavar='NUM')
-    parser.add_argument('--resolution',  help='The resolution of images',
+    parser.add_argument('--input-size',  help='The resolution of images',
             required=True, metavar='INT', type=int)
     return vars(parser.parse_args(args_it))
 
-
-RENDER_MODULES = {
-    'pretraining' : renders_geopose,
-    'sparse'      : renders_geopose_panoramas,
-}
 
 if '__main__' == __name__:
     args    = parse_args(sys.argv[1:])

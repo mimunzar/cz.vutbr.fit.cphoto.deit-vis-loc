@@ -19,10 +19,10 @@ import src.deit_vis_loc.libs.util as util
 
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data-dir',   help='The path to the dataset',
+    parser.add_argument('--data-dir',    help='The path to the dataset',
             required=True, metavar='DIR')
-    parser.add_argument('--resolution', help='The resolution of input images',
-            required=False, metavar='INT', type=int, default=224)
+    parser.add_argument('--input-size',  help='The resolution of input images',
+            required=True, type=int, metavar='INT')
     return vars(parser.parse_args(args_it))
 
 
@@ -56,8 +56,8 @@ def iter_im_positives(params, im_it, rd_it):
 
 if '__main__' == __name__:
     args  = parse_args(sys.argv[1:])
-    im_it = tuple(loader.iter_queries (args['data_dir'], args['resolution'], 'train'))
-    rd_it = loader.iter_sparse_renders(args['data_dir'], args['resolution'], 'segments')
+    im_it = tuple(loader.iter_queries (args['data_dir'], args['input_size'], 'train'))
+    rd_it = loader.iter_sparse_renders(args['data_dir'], args['input_size'], 'segments')
     result = it.starmap(iter_plot_positives, iter_im_positives(
         commons.SPARSE_PARAMS['positives'], random.sample(im_it, k=len(im_it)), rd_it))
 

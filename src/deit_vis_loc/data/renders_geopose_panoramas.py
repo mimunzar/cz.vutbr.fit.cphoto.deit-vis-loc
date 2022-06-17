@@ -2,9 +2,9 @@
 
 import collections as cl
 import functools as ft
-import itertools as it
 import os
 import pickle
+from PIL import Image
 
 import src.deit_vis_loc.data.commons as commons
 import src.deit_vis_loc.libs.log as log
@@ -47,51 +47,50 @@ def parse_line(csv_it):
     # for geopose images and the pitch and roll are 0.
 
 
-def process_im(resolution, im):
-    proc_im = util.compose(
-        ft.partial(commons.pad_to_square,     resolution),
-        ft.partial(commons.resize_keep_ratio, resolution),
-    )
-    return proc_im(commons.load_im(im))
-
-
-def process_render(data_dir, resolution, meta):
-    im_path = os.path.join(os.path.join(data_dir, f'{meta["name"]}_segments.png'))
-    return (process_im(resolution, im_path), meta)
+def process_render(fn_transform_im, data_dir, meta):
+    im_path = os.path.join(data_dir, f'{meta["name"]}_segments.png')
+    return (fn_transform_im(im_path), meta)
 
 
 def print_progress(total, data):
-    done, *_ = data
-    prog_str = f'{log.fmt_bar(50, total, done)} {log.fmt_fraction(total, done)}'
-    print(prog_str.center(log.LINE_WIDTH), end='\n' if total == done else '\r', flush=True)
+    done = util.first(data)
+    prog = f'{log.fmt_bar(50, total, done)} {log.fmt_fraction(total, done)}'
+    print(prog.center(log.LINE_WIDTH), end='\n' if total == done else '\r',
+            flush=True)
 
 
-def dataset_exists(output_dir, modality, resolution, **_):
+def make_im_transform(input_size):
+    return util.compose(
+        ft.partial(commons.pad_to_square,     input_size),
+        ft.partial(commons.resize_keep_ratio, input_size),
+        Image.open)
+
+
+def dataset_exists(output_dir, modality, input_size, **_):
     out_dir       = os.path.expanduser(output_dir)
     render_dir    = os.path.join(out_dir, 'renders', 'sparse', modality)
-    render_im_dir = os.path.join(render_dir, str(resolution))
+    render_im_dir = os.path.join(render_dir, str(input_size))
     return os.path.exists(render_im_dir)
 
 
-def write_dataset(sparse_dir, output_dir, modality, resolution, n_images, **_):
+def write_dataset(sparse_dir, output_dir, modality, input_size, n_images, **_):
     sparse_dir = os.path.expanduser(sparse_dir)
     data_dir   = os.path.join(sparse_dir, 'sparse_database', f'database_{modality}')
     info_fpath = os.path.join(data_dir, 'datasetInfoClean.csv')
 
     out_dir       = os.path.expanduser(output_dir)
     render_dir    = os.path.join(out_dir, 'renders', 'sparse', modality)
-    render_im_dir = os.path.join(render_dir, str(resolution))
+    render_im_dir = os.path.join(render_dir, str(input_size))
     os.makedirs(render_im_dir, exist_ok=True)
 
-    rd_it        = util.take(n_images, commons.iter_csv_file(parse_line, info_fpath))
-    prog_printer = ft.partial(print_progress,
-        sum(map(util.first, zip(it.repeat(1), util.take(n_images, open(info_fpath))))))
-
+    rd_it        = tuple(util.take(n_images, commons.iter_csv_file(parse_line, info_fpath)))
+    prog_printer = ft.partial(print_progress, len(rd_it))
+    im_transform = make_im_transform(input_size)
     with open(os.path.join(render_dir, 'meta.bin'), 'wb') as meta_f:
         prog_printer((0, None))
         util.dorun(
             map(prog_printer, enumerate(
                 map(ft.partial(save_processed, render_im_dir, meta_f),
-                    map(ft.partial(process_render, data_dir, resolution), rd_it)), 1)))
+                    map(ft.partial(process_render, im_transform, data_dir), rd_it)), 1)))
         pickle.dump('EOF', meta_f)
 
