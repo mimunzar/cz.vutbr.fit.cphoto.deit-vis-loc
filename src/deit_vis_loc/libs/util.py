@@ -106,12 +106,10 @@ def complement(f):
     return lambda *args: not f(*args)
 
 
-def _compose2(f, g):
-    return lambda *args: f(g(*args))
-
-
 def compose(*f_it):
-    return ft.reduce(_compose2, f_it)
+    def compose2(f, g):
+        return lambda *args: f(g(*args))
+    return ft.reduce(compose2, f_it)
 
 
 def juxt(*f_it):

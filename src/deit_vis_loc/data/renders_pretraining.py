@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+
+import collections as cl
+import functools as ft
+import os
+import pickle
+from PIL import Image
+
+import src.deit_vis_loc.libs.log as log
+import src.deit_vis_loc.libs.util as util
+import src.deit_vis_loc.data.commons as commons
+
+
+INFO_FILE_FIELDS = cl.OrderedDict({
+    'id'        : lambda x: x,
+    'query'     : lambda x: x,
+    'latitude'  : lambda x: float(x),
+    'longitude' : lambda x: float(x),
+    'elevation' : lambda x: float(x),
+    'yaw'       : lambda x: float(x),
+    'pitch'     : lambda x: float(x),
+    'roll'      : lambda x: float(x),
+    'fov'       : lambda x: float(x),
+})
+
+def parse_line(csv_it):
+    parsed = commons.parse_into(INFO_FILE_FIELDS, csv_it)
+    return {
+        'name'      : parsed['query'],
+        'query'     : parsed['query'],
+        'latitude'  : parsed['latitude'],
+        'longitude' : parsed['longitude'],
+        'elevation' : parsed['elevation'],
+        'yaw'       : parsed['yaw'],
+        'pitch'     : parsed['pitch'],
+        'roll'      : parsed['roll'],
+        'fov'       : parsed['fov'],
+    }
+
+
+def save_im_metadata(meta_file, meta):
+    pickle.dump(meta, meta_file)
+    return meta
+
+
+def save_transformed_im(fn_transform_im, in_dir, out_dir, meta):
+    im_name = meta["name"]
+    with Image.open(os.path.join(in_dir, f'{im_name}.png')) as im:
+        fn_transform_im(im, meta).save(os.path.join(out_dir, f'{im_name}.jpg'))
+    return meta
+
+
+def print_progress(total, data):
+    done = util.first(data)
+    prog = f'{log.fmt_bar(50, total, done)} {log.fmt_fraction(total, done)}'
+    print(prog.center(log.LINE_WIDTH), end='\n' if total == done else '\r', flush=True)
+
+
+def make_im_transform(input_size, scale_by_fov):
+    transform_fov = util.compose(
+        ft.partial(commons.pad_to_square, input_size),
+        ft.partial(commons.center_crop,   input_size),
+        ft.partial(commons.scale_by_fov,  input_size))
+    def im_transform_fov(im, meta):
+        return transform_fov(meta['fov'], im)
+    im_transform = util.compose(
+        ft.partial(commons.pad_to_square, input_size),
+        ft.partial(commons.scale_to_fit,  input_size),
+        lambda im, _: im)
+    return im_transform_fov if scale_by_fov else im_transform
+
+
+def data_suffix(modality, scale_by_fov, input_size):
+    return os.path.join(modality,
+            'data_fov' if scale_by_fov else 'data', str(input_size))
+
+
+def dataset_exists(output_dir, modality, input_size, scale_by_fov, **_):
+    data_dir = os.path.join(os.path.expanduser(output_dir),
+            'renders', 'pretraining', data_suffix(modality, scale_by_fov, input_size))
+    return (os.path.exists(data_dir), data_dir)
+
+
+def write_dataset(sparse_dir,
+        output_dir, modality, input_size, n_images, scale_by_fov, **_):
+    sparse_dir = os.path.expanduser(sparse_dir)
+    data_dir   = os.path.join(sparse_dir, 'sparse_queries', f'query_{modality}')
+    info_path  = os.path.join(data_dir, 'datasetInfoClean.csv')
+
+    meta_dir = os.path.join(os.path.expanduser(output_dir), 'renders', 'pretraining')
+    im_dir   = os.path.join(meta_dir, data_suffix(modality, scale_by_fov, input_size))
+    os.makedirs(im_dir, exist_ok=True)
+
+    rd_it        = tuple(util.take(n_images, commons.iter_csv_file(parse_line, info_path)))
+    prog_printer = ft.partial(print_progress, len(rd_it))
+    im_transform = make_im_transform(input_size, scale_by_fov)
+    with open(os.path.join(meta_dir, 'meta.bin'), 'wb') as meta_f:
+        prog_printer((0, None))
+        util.dorun(
+            map(prog_printer, enumerate(
+                map(ft.partial(save_im_metadata, meta_f),
+                    map(ft.partial(save_transformed_im, im_transform, data_dir, im_dir),
+                        rd_it)), 1)))
+        pickle.dump('EOF', meta_f)
+

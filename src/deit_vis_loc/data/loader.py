@@ -28,62 +28,56 @@ def assign_im_dir(im_dir, meta):
     # for different models).
 
 
-def iter_queries(data_dir, input_size, member):
-    data_dir     = os.path.expanduser(data_dir)
-    query_dir    = os.path.join(data_dir, 'queries')
-    query_im_dir = os.path.join(query_dir, str(input_size))
+def iter_queries(member, data_dir, input_size, scale_by_fov, **_):
+    query_dir    = os.path.join(os.path.expanduser(data_dir), 'queries')
+    query_im_dir = os.path.join(query_dir,
+            'data_fov' if scale_by_fov else 'data', str(input_size))
     if not os.path.exists(query_im_dir):
         raise FileNotFoundError(f'Image directory doesnt exists {query_im_dir}')
     return map(ft.partial(assign_im_dir, query_im_dir),
             iter_metafile(query_dir, META_NAMES[member.upper()]))
-    #^ Queries are stored in the following directory  structure  which  contains
-    # image metadata splitted into train, val and  test  datasets.   The  actual
-    # images are stored per input_size in subdirectories  to  support  different
-    # models.
-    #
-    #       queries/
-    #       ├── <input_size1>
-    #       ├── <input_size2>
+    #^
+    #       queries
+    #       ├── data
+    #       │   └── <input_size>
+    #       ├── data_fov
+    #       │   └── <input_size>
     #       ├── test.bin
     #       ├── train.bin
     #       └── val.bin
 
 
 
-def iter_pretraining_renders(data_dir, input_size, modality):
+def iter_renders_pretraining(data_dir, input_size, modality, scale_by_fov, **_):
     data_dir      = os.path.expanduser(data_dir)
-    render_dir    = os.path.join(data_dir, 'renders', 'pretraining', modality)
-    render_im_dir = os.path.join(render_dir, str(input_size))
+    render_dir    = os.path.join(data_dir, 'renders', 'pretraining')
+    render_im_dir = os.path.join(render_dir,
+            modality, 'data_fov' if scale_by_fov else 'data', str(input_size))
     if not os.path.exists(render_im_dir):
         raise FileNotFoundError(f'Image directory doesnt exists {render_im_dir}')
-    return map(ft.partial(assign_im_dir, render_im_dir), iter_metafile(render_dir, 'meta.bin'))
-    #^ Renders are stored in the  following  directory  structure  splitted  per
-    # dataset, modality and  input_size.   The  metadata  differ  for  different
-    # datasets and modalities.  As with queries render  images  are  stored  per
-    # input_size to support different models.
-    #
-    #       renders/
-    #       ├── pretraining
-    #       │   ├── <modality1>
-    #       │   └── <modality2>
-    #       │       ├── <input_size1>
-    #       │       ├── <input_size2>
-    #       │       └── meta.bin
-    #       ├── sparse
-    #       │   ├── <modality1>
-    #       │   └── <modality2>
-    #       │       ├── <input_size1>
-    #       │       ├── <input_size2>
-    #       │       └── meta.bin
-    #       └── uniform
-    #           └── ...
+    return map(ft.partial(assign_im_dir, render_im_dir),
+            iter_metafile(render_dir, 'meta.bin'))
+    #^
+    #        renders/pretraining
+    #        ├── meta.bin
+    #        └── <modality>
+    #            ├── data
+    #            │   └── <input_size>
+    #            └── data_fov
+    #                └── <input_size>
 
 
-def iter_sparse_renders(data_dir, input_size, modality):
+def iter_renders_sparse(data_dir, input_size, modality, **_):
     data_dir      = os.path.expanduser(data_dir)
-    render_dir    = os.path.join(data_dir, 'renders', 'sparse', modality)
-    render_im_dir = os.path.join(render_dir, str(input_size))
+    render_dir    = os.path.join(data_dir, 'renders', 'sparse')
+    render_im_dir = os.path.join(render_dir, modality, str(input_size))
     if not os.path.exists(render_im_dir):
         raise FileNotFoundError(f'Image directory doesnt exists {render_im_dir}')
-    return map(ft.partial(assign_im_dir, render_im_dir), iter_metafile(render_dir, 'meta.bin'))
+    return map(ft.partial(assign_im_dir, render_im_dir),
+            iter_metafile(render_dir, 'meta.bin'))
+    #^
+    #       renders/sparse
+    #       ├── meta.bin
+    #       └── <modality>
+    #           └── <input_size>
 

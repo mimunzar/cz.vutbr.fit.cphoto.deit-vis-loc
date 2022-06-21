@@ -132,38 +132,38 @@ def make_mem_iter_desc(fn_iter_desc, im_it):
     return mem_iter_desc
 
 
-def iter_desc(gpu_imcap, model, im_it):
+def iter_desc(model, im_it):
+    def im_tensor(meta):
+        with Image.open(meta['path']) as im:
+            return T.to_tensor(im)
     net, device = util.pluck(['net', 'device'], model)
     stack       = util.compose(torch.stack, tuple)
-    iter_tensor = ft.partial(map, util.compose(
-        T.to_tensor, Image.open, ft.partial(util.pluck, ['path'])))
     def iter_batch_desc(im_it):
-        return net(stack(iter_tensor(im_it)).to(device))
+        return net(stack(map(im_tensor, im_it)).to(device))
     return util.flatten(map(iter_batch_desc,
-        util.partition(gpu_imcap, im_it, strict=False)))
+        util.partition(model['gpu_imcap'], im_it, strict=False)))
     # => (desc1, desc2, ...)
 
 
 TRN_RECALL = None
 VAL_RECALL = None
 
-def epoch_feed(model, params, vim_it, tim_it, rd_it):
+def epoch_feed(fn_iter_desc, model, params, vim_it, tim_it, rd_it):
     global TRN_RECALL, VAL_RECALL
     rd_it = tuple(rd_it)
     with torch.no_grad():
         model['net'].eval()
-        iter_dsc = ft.partial(iter_desc, model['gpu_imcap'], model)
         rcl_trp  = ft.partial(recalls_imtriplets, params,
-                iter_dsc, make_mem_iter_desc(iter_dsc, rd_it), rd_it)
+                fn_iter_desc, make_mem_iter_desc(fn_iter_desc, rd_it), rd_it)
         TRN_RECALL, trn_trp_it = rcl_trp(tim_it)
         VAL_RECALL, val_trp_it = rcl_trp(vim_it)
         print_recall(TRN_RECALL, VAL_RECALL)
         return (tuple(trn_trp_it), tuple(val_trp_it))
 
 
-def iter_epoch_feed(model, params, vim_it, tim_it, rd_it):
-    triplets = ft.partial(epoch_feed, model,
-            params, tuple(vim_it), tuple(tim_it), tuple(rd_it))
+def iter_epoch_feed(fn_iter_desc, model, params, vim_it, tim_it, rd_it):
+    triplets = ft.partial(epoch_feed,
+        fn_iter_desc, model, params, tuple(vim_it), tuple(tim_it), tuple(rd_it))
     return util.flatten(util.repeatedly(
         lambda: util.take(params['mine_every_epoch'], it.repeat(triplets()))))
     # => ((train, val),         ; epoch1
@@ -206,13 +206,12 @@ def make_epochstat(label, params, im_triplet_it):
     return epochstat
 
 
-def val_one_epoch(model, params, epoch, im_triplet_it):
+def val_one_epoch(fn_iter_desc, model, params, epoch, im_triplet_it):
     im_triplet_it = tuple(im_triplet_it)
-    iter_dsc      = ft.partial(iter_desc, model['gpu_imcap'], model)
     with torch.no_grad():
         model['net'].eval()
         return ft.reduce(make_epochstat(f'Val {epoch}', params, im_triplet_it),
-                map(float, iter_batchloss(params, iter_dsc, im_triplet_it)),
+                map(float, iter_batchloss(params, fn_iter_desc, im_triplet_it)),
                 {'recall': VAL_RECALL})
 
 
@@ -221,21 +220,21 @@ def backward(optim, loss):
     return loss.detach()
 
 
-def train_one_epoch(model, params, epoch, im_triplet_it):
+def train_one_epoch(fn_iter_desc, model, params, epoch, im_triplet_it):
     im_triplet_it = tuple(im_triplet_it)
-    iter_dsc      = ft.partial(iter_desc, model['gpu_imcap'], model)
     with torch.enable_grad():
         model['net'].train()
         return ft.reduce(make_epochstat(f'Epoch {epoch}', params, im_triplet_it),
                 map(util.compose(float, ft.partial(backward, model['optim'])),
-                    iter_batchloss(params, iter_dsc, im_triplet_it)),
+                    iter_batchloss(params, fn_iter_desc, im_triplet_it)),
                 {'recall': TRN_RECALL})
 
 
 def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):
-    iter_epoch = ft.partial(iter_epoch_feed, model, params)
-    train_one  = ft.partial(train_one_epoch, model, params)
-    val_one    = ft.partial(val_one_epoch,   model, params)
+    iter_dsc   = ft.partial(iter_desc, model)
+    iter_epoch = ft.partial(iter_epoch_feed, iter_dsc, model, params)
+    train_one  = ft.partial(train_one_epoch, iter_dsc, model, params)
+    val_one    = ft.partial(val_one_epoch,   iter_dsc, model, params)
     def one_epoch(epoch, trainval_im_triplet_it):
         t, v = trainval_im_triplet_it
         return {'epoch': epoch, 'train': train_one(epoch, t), 'val': val_one(epoch, v)}

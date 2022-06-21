@@ -43,7 +43,7 @@ def parse_args(args_it):
             required=True, metavar='FILE')
     parser.add_argument('--device',      help='The device to use',
             required=False, choices=['cpu', 'cuda'], default='cuda')
-    parser.add_argument('--gpu-imcap',   help='The amount of images to fit to GPU',
+    parser.add_argument('--gpu-imcap',   help='The amount of images to fit on GPU',
             required=True, type=int, metavar='INT')
     return vars(parser.parse_args(args_it))
 
