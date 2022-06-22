@@ -1,0 +1,20 @@
+{
+    "lr"               : 1e-4,
+    "batch_size"       : 2,
+    "margin"           : 0.1,
+    "max_epochs"       : 100,
+    "mine_every_epoch" : 5,
+    "positives": {
+        "samples"     : 1,
+        "dist_m"      : 20,
+        "dist_tol_m"  : 1,
+        "yaw_deg"     : 15,
+        "yaw_tol_deg" : 1
+    },
+    "negatives": {
+        "samples"     : 10,
+        "dist_m"      : 2000,
+        "dist_tol_m"  : 10
+    }
+}
+
