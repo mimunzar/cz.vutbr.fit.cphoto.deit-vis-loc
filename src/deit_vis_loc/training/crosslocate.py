@@ -6,12 +6,11 @@ import math as ma
 
 import torch
 import torch.nn.functional as N
-import torchvision.transforms.functional as T
-from PIL import Image
 
-import src.deit_vis_loc.libs.util as util
+import src.deit_vis_loc.libs.image as image
 import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.spherical as spherical
+import src.deit_vis_loc.libs.util as util
 import src.deit_vis_loc.training.callbacks as callbacks
 
 
@@ -133,13 +132,12 @@ def make_mem_iter_desc(fn_iter_desc, im_it):
 
 
 def iter_desc(model, im_it):
-    def im_tensor(meta):
-        with Image.open(meta['path']) as im:
-            return T.to_tensor(im)
     net, device = util.pluck(['net', 'device'], model)
     stack       = util.compose(torch.stack, tuple)
+    iter_tensor = ft.partial(map, util.compose(
+        image.open_as_tensor, ft.partial(util.pluck, ['path'])))
     def iter_batch_desc(im_it):
-        return net(stack(map(im_tensor, im_it)).to(device))
+        return net(stack(iter_tensor(im_it)).to(device))
     return util.flatten(map(iter_batch_desc,
         util.partition(model['gpu_imcap'], im_it, strict=False)))
     # => (desc1, desc2, ...)
@@ -150,13 +148,13 @@ VAL_RECALL = None
 
 def epoch_feed(fn_iter_desc, model, params, vim_it, tim_it, rd_it):
     global TRN_RECALL, VAL_RECALL
-    rd_it = tuple(rd_it)
     with torch.no_grad():
         model['net'].eval()
-        rcl_trp  = ft.partial(recalls_imtriplets, params,
-                fn_iter_desc, make_mem_iter_desc(fn_iter_desc, rd_it), rd_it)
-        TRN_RECALL, trn_trp_it = rcl_trp(tim_it)
-        VAL_RECALL, val_trp_it = rcl_trp(vim_it)
+        rd_it                  = tuple(rd_it)
+        recall_triplets        = ft.partial(recalls_imtriplets,
+                params, fn_iter_desc, make_mem_iter_desc(fn_iter_desc, rd_it), rd_it)
+        TRN_RECALL, trn_trp_it = recall_triplets(tim_it)
+        VAL_RECALL, val_trp_it = recall_triplets(vim_it)
         print_recall(TRN_RECALL, VAL_RECALL)
         return (tuple(trn_trp_it), tuple(val_trp_it))
 

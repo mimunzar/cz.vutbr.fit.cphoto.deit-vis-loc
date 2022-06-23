@@ -6,9 +6,10 @@ import os
 import pickle
 from PIL import Image, ImageOps
 
+import src.deit_vis_loc.libs.image as image
 import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.util as util
-import src.deit_vis_loc.data.commons as commons
+import src.deit_vis_loc.data.csv as csv
 
 
 
@@ -24,7 +25,7 @@ CAMERA_FIELDS = cl.OrderedDict({
 })
 INFO_FILE_FIELDS = cl.OrderedDict({
     'annotation' : lambda x: x,
-    'camera'     : lambda x: commons.parse_into(CAMERA_FIELDS, x.split()),
+    'camera'     : lambda x: csv.values_into(CAMERA_FIELDS, x.split()),
     'latitude'   : lambda x: float(x),
     'longitude'  : lambda x: float(x),
     'elevation'  : lambda x: float(x),
@@ -32,7 +33,7 @@ INFO_FILE_FIELDS = cl.OrderedDict({
 })
 
 def meta_struct(name, content_it):
-    parsed = commons.parse_into(INFO_FILE_FIELDS, content_it)
+    parsed = csv.values_into(INFO_FILE_FIELDS, content_it)
     return {
         'name'      : name,
         'latitude'  : parsed['latitude'],
@@ -78,14 +79,14 @@ def make_im_transform(input_size, scale_by_fov):
         return im if im_name in wrong_exif_it else ImageOps.exif_transpose(im)
     def im_transform_fov(im, meta):
         return util.compose(
-            ft.partial(commons.pad_to_square, input_size),
-            ft.partial(commons.center_crop,   input_size),
-            ft.partial(commons.scale_by_fov,  input_size, meta['FOV']),
+            ft.partial(image.pad_to_square, input_size),
+            ft.partial(image.center_crop,   input_size),
+            ft.partial(image.scale_by_fov,  input_size, meta['FOV']),
             adjust_orientation)(im, meta['name'])
     def im_transform(im, meta):
         return util.compose(
-            ft.partial(commons.pad_to_square, input_size),
-            ft.partial(commons.scale_to_fit,  input_size),
+            ft.partial(image.pad_to_square, input_size),
+            ft.partial(image.scale_to_fit,  input_size),
             adjust_orientation)(im, meta['name'])
     return im_transform_fov if scale_by_fov else im_transform
 

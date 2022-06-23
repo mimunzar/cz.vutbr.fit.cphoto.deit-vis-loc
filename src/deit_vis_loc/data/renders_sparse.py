@@ -6,7 +6,8 @@ import os
 import pickle
 from PIL import Image
 
-import src.deit_vis_loc.data.commons as commons
+import src.deit_vis_loc.data.csv as csv
+import src.deit_vis_loc.libs.image as image
 import src.deit_vis_loc.libs.log as log
 import src.deit_vis_loc.libs.util as util
 
@@ -24,7 +25,7 @@ INFO_FILE_FIELDS = cl.OrderedDict({
 })
 
 def parse_line(csv_it):
-    parsed = commons.parse_into(INFO_FILE_FIELDS, csv_it)
+    parsed = csv.values_into(INFO_FILE_FIELDS, csv_it)
     return {
         'name'      : parsed['segment'],
         'query'     : parsed['query'],
@@ -59,8 +60,8 @@ def print_progress(total, data):
 
 def make_im_transform(input_size):
     return util.compose(
-        ft.partial(commons.pad_to_square, input_size),
-        ft.partial(commons.scale_to_fit,  input_size))
+        ft.partial(image.pad_to_square, input_size),
+        ft.partial(image.scale_to_fit,  input_size))
 
 
 def dataset_exists(output_dir, modality, input_size, **_):
@@ -78,7 +79,7 @@ def write_dataset(sparse_dir, output_dir, modality, input_size, n_images, **_):
     im_dir   = os.path.join(meta_dir, modality, str(input_size))
     os.makedirs(im_dir, exist_ok=True)
 
-    rd_it        = tuple(util.take(n_images, commons.iter_csv_file(parse_line, info_path)))
+    rd_it        = tuple(util.take(n_images, csv.iter_file(parse_line, info_path)))
     prog_printer = ft.partial(print_progress, len(rd_it))
     im_transform = make_im_transform(input_size)
     with open(os.path.join(meta_dir, 'meta.bin'), 'wb') as meta_f:
