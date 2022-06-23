@@ -27,24 +27,26 @@ def load_net(model_path, **_):
 
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model-path',  help='The name of the model',
+    parser.add_argument('--model-path', help='The name of the model',
             required=True, metavar='FILE')
-    parser.add_argument('--input-size',  help='The resolution of input images',
+    parser.add_argument('--input-size', help='The resolution of input images',
             required=True, type=int, metavar='INT')
-    parser.add_argument('--data-dir',    help='The path to the dataset',
+    parser.add_argument('--data-dir', help='The path to the dataset',
             required=True, metavar='DIR')
-    parser.add_argument('--dataset',     help='The type of the input dataset',
+    parser.add_argument('--dataset', help='The type of the input dataset',
             required=True, choices=['sparse', 'pretraining'])
-    parser.add_argument('--modality',    help='The modality of images',
+    parser.add_argument('--modality', help='The modality of images',
             required=True, choices=['segments', 'silhouettes', 'depth'])
-    parser.add_argument('--n-images',    help='The number of images',
+    parser.add_argument('--n-images', help='The number of images',
             required=False, type=int, default=None, metavar='NUM')
-    parser.add_argument('--params',      help='The file path to training definition',
+    parser.add_argument('--params', help='The file path to training definition',
             required=True, metavar='FILE')
-    parser.add_argument('--device',      help='The device to use',
+    parser.add_argument('--device', help='The device to use',
             required=False, choices=['cpu', 'cuda'], default='cuda')
-    parser.add_argument('--gpu-imcap',   help='The amount of images to fit on GPU',
+    parser.add_argument('--gpu-imcap', help='The amount of images to fit on GPU',
             required=True, type=int, metavar='INT')
+    parser.add_argument('--scale-by-fov', help='When set scales images by their FOV',
+            required=False, action="store_true")
     return vars(parser.parse_args(args_it))
 
 

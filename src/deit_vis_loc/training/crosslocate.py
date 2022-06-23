@@ -81,7 +81,9 @@ def iter_renderdist(fn_iter_desc, fn_mem_iter_desc, rd_it, im):
     dist  = ft.partial(cosine_dist, stack(fn_iter_desc((im,))))
     def iter_batch_renderdist(rd_it):
         rd_it = tuple(rd_it)
-        return zip(rd_it, dist(stack(fn_mem_iter_desc(rd_it))))
+        return zip(rd_it, dist(stack(fn_mem_iter_desc(rd_it))).cpu())
+        #^ Moves all distance tensors to CPU so they can be sorted effectively
+        # without having to move each element's data to CPU.
     return util.flatten(map(iter_batch_renderdist,
         util.partition(DIST_PART_SIZE, rd_it, strict=False)))
     # => ((render1, dist1), (render2, dist2), ...)
