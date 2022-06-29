@@ -42,8 +42,8 @@ def make_loss_plotter(outdir):
     tlosses = []
     vlosses = []
     def loss_plotter(epochstats):
-        tlosses.append(epochstats['train']['avg_loss'])
-        vlosses.append(epochstats['val']['avg_loss'])
+        tlosses.append(epochstats['train']['mean_loss'])
+        vlosses.append(epochstats['val']['mean_loss'])
         fg, ax = plt.subplots()
         plot_loss_on_axis(ax, tlosses, vlosses)
         fg.savefig(outpath)

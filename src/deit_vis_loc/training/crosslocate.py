@@ -3,6 +3,7 @@
 import functools as ft
 import itertools as it
 import math as ma
+import statistics as st
 
 import torch
 import torch.nn.functional as N
@@ -16,11 +17,11 @@ import src.deit_vis_loc.training.callbacks as callbacks
 
 
 def print_recall(trecall_it, vrecall_it):
-    content_it = log.fmt_table([
+    table_it = log.fmt_table([
         ['',           'Train',                          'Val'],
         ['Recall@1',   f'{util.first (trecall_it):.2%}', f'{util.first (vrecall_it):.2%}'],
         ['Recall@100', f'{util.second(trecall_it):.2%}', f'{util.second(vrecall_it):.2%}']])
-    util.dorun(map(print, it.chain([''], content_it, [''])))
+    util.dorun(map(print, it.chain([''], table_it, [''])))
 
 
 def is_dist_close(limit_m, tol_m, im, render):
@@ -70,8 +71,8 @@ def iter_imtriplets(params, im, rdbydist_it):
         iter_hardnegrenders(params, im, rdbydist_it))
 
 
-def cosine_dist(emb, emb_other):
-    return 1 - N.cosine_similarity(emb, emb_other)
+def cosine_dist(desc, other):
+    return 1 - N.cosine_similarity(desc, other)
 
 
 DIST_PART_SIZE = 1000
@@ -162,57 +163,74 @@ def epoch_feed(fn_iter_desc, model, params, vim_it, tim_it, rd_it):
 
 
 def iter_epoch_feed(fn_iter_desc, model, params, vim_it, tim_it, rd_it):
-    triplets = ft.partial(epoch_feed,
+    mine_nth_epoch = params['mine_every_epoch']
+    tv_im_triplets = ft.partial(epoch_feed,
         fn_iter_desc, model, params, tuple(vim_it), tuple(tim_it), tuple(rd_it))
     return util.flatten(util.repeatedly(
-        lambda: util.take(params['mine_every_epoch'], it.repeat(triplets()))))
+        lambda: util.take(mine_nth_epoch, it.repeat(tv_im_triplets()))))
     # => ((train, val),         ; epoch1
-    #     (train, val), ...)    ; epoch2
+    #     (train, val), ...)    ; epoch2..n
 
 
-def triplet_loss(margin, anchor, pos, neg):
-    return N.triplet_margin_with_distance_loss(anchor,
-            pos, neg, margin=margin, distance_function=cosine_dist)
+def iter_im_batch_triplets(batch_size, im_triplets_it):
+    def iter_batch_triplets(triplets_it):
+        return util.partition(batch_size, triplets_it, strict=False)
+    return map(iter_batch_triplets, im_triplets_it)
+    # => (((triplet1, triplet2, ...),       ;batch1  im1
+    #      (triplet1, triplet2, ...), ...), ;batch2
+    #     ((triplet1, triplet2, ...),       ;batch1  im2
+    #      (triplet1, triplet2, ...), ...), ;batch2
+    #     ...)
 
 
-def mean_triplet_loss(margin, fn_iter_desc, triplet_it):
+def mean_triplet_loss(fn_iter_desc, margin, triplet_it):
     stack_desc = util.compose(torch.stack, tuple, fn_iter_desc)
-    return triplet_loss(margin, *map(stack_desc, zip(*triplet_it))).mean()
+    def triplet_loss(anchor, pos, neg):
+        return N.triplet_margin_with_distance_loss(anchor,
+                pos, neg, margin=margin, distance_function=cosine_dist)
+    return triplet_loss(*map(stack_desc, zip(*triplet_it))).mean()
 
 
-def iter_batchloss(params, fn_iter_desc, im_triplet_it):
-    return map(ft.partial(mean_triplet_loss, params['margin'], fn_iter_desc),
-        util.partition(params['batch_size'], util.flatten(im_triplet_it), strict=False))
-    # => (loss1, loss2, ...)
+def iter_im_batchloss(fn_iter_desc, params, im_triplets_it):
+    mean_loss = ft.partial(mean_triplet_loss, fn_iter_desc, params['margin'])
+    return map(ft.partial(map, mean_loss),
+            iter_im_batch_triplets(params['batch_size'], im_triplets_it))
+    # => ((loss1, loss2, ...),          ; im1
+    #     (loss1, loss2, ...), ...)     ; im2
 
 
-def make_epochstat(label, params, im_triplet_it):
-    total_im      = len(tuple(im_triplet_it))
-    total_im_tp   = params['positives']['samples']*params['negatives']['samples']
-    i, batch_size = (0, params['batch_size'])
-    avg_loss      = util.make_running_avg()
-    avg_imsec     = util.make_avg_ims_sec()
-    prog_bar      = log.make_progress_bar(bar_width=30, total=total_im)
-    print(f'{prog_bar(label, 0, 0, 0)}', end='\r', flush=True)
-    def epochstat(acc, batchloss):
-        nonlocal i
-        i        = i + 1
-        im_done  = (i*batch_size)//total_im_tp
-        im_speed = avg_imsec(im_done)
-        loss     = avg_loss(batchloss)
-        print(f'\033[K{prog_bar(label, im_done, im_speed, loss)}',
-            end='\n' if total_im == im_done else '\r', flush=True)
-        return util.assoc(acc, ('avg_loss', loss), ('avg_speed', im_speed))
+def iter_imloss(fn_iter_desc, fn_on_batch_loss, params, im_triplets_it):
+    loss_hook = util.compose(float, fn_on_batch_loss)
+    return map(util.compose(st.mean, ft.partial(map, loss_hook)),
+            iter_im_batchloss(fn_iter_desc, params, im_triplets_it))
+    # => (imloss1, imloss2, ...)    ; epoch
+
+
+def make_epochstat(label, im_triplets_it):
+    total_ims  = len(tuple(im_triplets_it))
+    done_ims   = 0
+    mean_loss  = util.make_running_mean()
+    mean_speed = util.make_mean_ims_sec()
+    prog_bar   = log.make_progress_bar(30, total_ims)
+    print(f'{prog_bar(label, 0, 0, 0)}', end='\r')
+    def epochstat(acc, imloss):
+        nonlocal done_ims
+        done_ims = done_ims + 1
+        loss     = mean_loss(imloss)
+        speed    = mean_speed(done_ims)
+        print(f'\033[K{prog_bar(label, done_ims, speed, loss)}',
+                end='\n' if total_ims == done_ims else '\r')
+        return util.assoc(acc, ('mean_loss',  loss), ('mean_speed', speed))
     return epochstat
 
 
-def val_one_epoch(fn_iter_desc, model, params, epoch, im_triplet_it):
-    im_triplet_it = tuple(im_triplet_it)
+def val_one_epoch(fn_iter_desc, model, params, epoch, im_triplets_it):
+    im_triplets_it = tuple(im_triplets_it)
+    epochstat      = make_epochstat(f'Val {epoch}', im_triplets_it)
+    imloss_it      = iter_imloss(fn_iter_desc, util.identity, params, im_triplets_it)
+    model['net'].eval()
     with torch.no_grad():
-        model['net'].eval()
-        return ft.reduce(make_epochstat(f'Val {epoch}', params, im_triplet_it),
-                map(float, iter_batchloss(params, fn_iter_desc, im_triplet_it)),
-                {'recall': VAL_RECALL})
+        return ft.reduce(epochstat, imloss_it, {'recall': VAL_RECALL})
 
 
 def backward(optim, loss):
@@ -220,14 +238,14 @@ def backward(optim, loss):
     return loss.detach()
 
 
-def train_one_epoch(fn_iter_desc, model, params, epoch, im_triplet_it):
-    im_triplet_it = tuple(im_triplet_it)
+def train_one_epoch(fn_iter_desc, model, params, epoch, im_triplets_it):
+    im_triplets_it = tuple(im_triplets_it)
+    epochstat      = make_epochstat(f'Epoch {epoch}', im_triplets_it)
+    imloss_it      = iter_imloss(fn_iter_desc,
+            ft.partial(backward, model['optim']), params, im_triplets_it)
+    model['net'].train()
     with torch.enable_grad():
-        model['net'].train()
-        return ft.reduce(make_epochstat(f'Epoch {epoch}', params, im_triplet_it),
-                map(util.compose(float, ft.partial(backward, model['optim'])),
-                    iter_batchloss(params, fn_iter_desc, im_triplet_it)),
-                {'recall': TRN_RECALL})
+        return ft.reduce(epochstat, imloss_it, {'recall': VAL_RECALL})
 
 
 def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):
@@ -239,7 +257,7 @@ def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):
         t, v = trainval_im_triplet_it
         return {'epoch': epoch, 'train': train_one(epoch, t), 'val': val_one(epoch, v)}
     return it.starmap(one_epoch, enumerate(iter_epoch(vim_it, tim_it, rd_it), 1))
-    # => (stat1, stat2, ...)
+    # => (epochstat1, epochstat2, ...)
 
 
 def train(model, params, output_dir, vim_it, tim_it, rd_it):

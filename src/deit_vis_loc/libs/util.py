@@ -91,17 +91,6 @@ def memoize(f):
     return ft.lru_cache(maxsize=None)(f)
 
 
-def memoize_tensor(device, f):
-    mem = {}
-    def cached_fn(*args):
-        if args in mem:
-            return mem[args].to(device)
-        result    = f(*args)
-        mem[args] = result.cpu()
-        return result
-    return cached_fn
-
-
 def complement(f):
     return lambda *args: not f(*args)
 
@@ -131,7 +120,7 @@ def make_checker(validators):
     return check_dict
 
 
-def make_running_avg():
+def make_running_mean():
     i, avg = (0, 0)
     def running_avg(n):
         nonlocal i, avg
@@ -154,8 +143,8 @@ def make_ims_sec(fn_fracsec=time):
     return ims_sec
 
 
-def make_avg_ims_sec():
+def make_mean_ims_sec():
     ims_sec     = make_ims_sec()
-    running_avg = make_running_avg()
+    running_avg = make_running_mean()
     return lambda n: running_avg(ims_sec(n))
 

@@ -156,13 +156,13 @@ def test_checker():
     assert checker({'foo': 1, 'bar': 1, 'baz': 0}) == tuple()
 
 
-def test_make_running_avg():
-    ravg = util.make_running_avg()
-    assert ravg(0) == 0
-    assert ravg(2) == 1
-    assert ravg(4) == 2
-    assert ravg(6) == 3
-    assert ravg(8) == 4
+def test_make_running_mean():
+    run_mean = util.make_running_mean()
+    assert run_mean(0) == 0
+    assert run_mean(2) == 1
+    assert run_mean(4) == 2
+    assert run_mean(6) == 3
+    assert run_mean(8) == 4
 
 
 def test_make_ims_sec():
