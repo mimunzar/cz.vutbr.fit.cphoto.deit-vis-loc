@@ -45,9 +45,9 @@ def save_im_metadata(meta_f, meta):
     return meta
 
 
-def save_transformed_im(fn_transform_im, in_dir, out_dir, meta):
+def save_transformed_im(fn_transform_im, modality, in_dir, out_dir, meta):
     im_name = meta["name"]
-    with Image.open(os.path.join(in_dir, f'{im_name}_segments.png')) as im:
+    with Image.open(os.path.join(in_dir, f'{im_name}_{modality}.png')) as im:
         fn_transform_im(im).save(os.path.join(out_dir, f'{im_name}.jpg'))
     return meta
 
@@ -87,7 +87,7 @@ def write_dataset(sparse_dir, output_dir, modality, input_size, n_images, **_):
         util.dorun(
             map(prog_printer, enumerate(
                 map(ft.partial(save_im_metadata, meta_f),
-                    map(ft.partial(save_transformed_im, im_transform, data_dir, im_dir),
+                    map(ft.partial(save_transformed_im, im_transform, modality, data_dir, im_dir),
                         rd_it)), 1)))
         pickle.dump('EOF', meta_f)
 
