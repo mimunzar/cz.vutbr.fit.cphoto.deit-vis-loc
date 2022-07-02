@@ -75,19 +75,11 @@ def cosine_dist(desc, other):
     return 1 - N.cosine_similarity(desc, other)
 
 
-DIST_PART_SIZE = 1000
-
-def iter_renderdist(fn_iter_desc, fn_mem_iter_desc, rd_it, im):
-    stack = util.compose(torch.stack, tuple)
-    dist  = ft.partial(cosine_dist, stack(fn_iter_desc((im,))))
-    def iter_batch_renderdist(rd_it):
-        rd_it = tuple(rd_it)
-        return zip(rd_it, dist(stack(fn_mem_iter_desc(rd_it))).cpu())
-        #^ Moves all distance tensors to CPU so they can be sorted effectively
-        # without having to move each element's data to CPU.
-    return util.flatten(map(iter_batch_renderdist,
-        util.partition(DIST_PART_SIZE, rd_it, strict=False)))
-    # => ((render1, dist1), (render2, dist2), ...)
+def iter_renderbydist(fn_iter_desc, fn_mem_iter_desc, rd_it, im):
+    rd_it   = tuple(rd_it)
+    stack   = util.compose(torch.stack, tuple)
+    dist_it = cosine_dist(stack(fn_iter_desc((im,))), stack(fn_mem_iter_desc(rd_it)))
+    return util.pluck(torch.argsort(dist_it), rd_it)
 
 
 def locale1_locale100(params, im, rdbydist_it):
@@ -100,12 +92,9 @@ def locale1_locale100(params, im, rdbydist_it):
 
 
 def iter_im_localestriplets(params, fn_iter_desc, fn_mem_iter_desc, rd_it, im_it):
-    iter_rendersbyimdist = util.compose(
-        ft.partial(map, util.first),
-        ft.partial(util.sortby, util.second),
-        ft.partial(iter_renderdist, fn_iter_desc, fn_mem_iter_desc))
+    iter_rdbydist = ft.partial(iter_renderbydist, fn_iter_desc, fn_mem_iter_desc)
     def localetriplets(rd_it, im):
-        rdbydist_it = tuple(iter_rendersbyimdist(rd_it, im))
+        rdbydist_it = tuple(iter_rdbydist(rd_it, im))
         triplet_it  = iter_imtriplets(params, im, rdbydist_it)
         return (locale1_locale100(params, im, rdbydist_it), tuple(triplet_it))
     return map(ft.partial(localetriplets, tuple(rd_it)), im_it)
@@ -199,8 +188,8 @@ def iter_im_batchloss(fn_iter_desc, params, im_triplets_it):
     #     (loss1, loss2, ...), ...)     ; im2
 
 
-def iter_imloss(fn_iter_desc, fn_on_batch_loss, params, im_triplets_it):
-    loss_hook = util.compose(float, fn_on_batch_loss)
+def iter_imloss(fn_iter_desc, fn_loss_hook, params, im_triplets_it):
+    loss_hook = util.compose(float, fn_loss_hook)
     return map(util.compose(st.mean, ft.partial(map, loss_hook)),
             iter_im_batchloss(fn_iter_desc, params, im_triplets_it))
     # => (imloss1, imloss2, ...)    ; epoch
