@@ -10,7 +10,8 @@ from datetime import datetime
 import torch
 import torch.cuda
 import torch.hub
-import torch.optim
+from torch.optim import SGD
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 import src.deit_vis_loc.data.loader as loader
 import src.deit_vis_loc.training.config as config
@@ -28,13 +29,15 @@ def start(out_dir, net, args, params):
     def device_name(device, **_):
         return torch.cuda.get_device_name(device) if 'cuda' == device else 'CPU'
 
-    def build_model(net, lr, device, gpu_imcap, **_):
+    def build_model(net, max_epochs, lr, min_lr, device, gpu_imcap, **_):
         net.to(device)
+        optim = SGD(net.parameters(), lr, momentum=0.9)
         return {
             'net'       : net,
             'device'    : device,
             'gpu_imcap' : gpu_imcap,
-            'optim'     : torch.optim.SGD(net.parameters(), lr, momentum=0.9),
+            'optim'     : optim,
+            'scheduler' : CosineAnnealingLR(optim, max_epochs, min_lr),
         }
 
     def load_data(n_images, dataset, **_):

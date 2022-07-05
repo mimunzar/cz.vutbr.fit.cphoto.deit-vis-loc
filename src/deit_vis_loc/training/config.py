@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import functools as ft
-import json
 
 import src.deit_vis_loc.libs.util as util
 
@@ -35,6 +34,7 @@ VALIDATORS = {
     'margin'           : util.make_validator('margin must be positive', IS_POS),
     'mine_every_epoch' : util.make_validator('mine_every_epoch must be a positive int', IS_POS_INT),
     'lr'               : util.make_validator('learning rate must be positive number', IS_POS),
+    'min_lr'           : util.make_validator('min. learning rate must be positive number', IS_POS),
     'positives'        : util.make_validator('positives must be dictionary', IS_DICT),
     'negatives'        : util.make_validator('negatives must be dictionary', IS_DICT),
 }

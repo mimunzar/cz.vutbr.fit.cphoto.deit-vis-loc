@@ -3,7 +3,8 @@
 import argparse
 import sys
 
-import torch.optim
+from torch.optim import SGD
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 import src.deit_vis_loc.libs.util as util
 import src.deit_vis_loc.data.loader as loader
@@ -46,17 +47,21 @@ if '__main__' == __name__:
 
     params = {
         **PRETRAINING_PARAMS,
+        'max_epochs'       : 100,
         'margin'           : 0.1,
         'lr'               : 1e-3,
+        'min_lr'           : 1e-5,
         'batch_size'       : 5,
         'mine_every_epoch' : 2,
     }
     net   = zoo.new(args['model_name']).to(device)
+    optim = SGD(net.parameters(), params['lr'], momentum=0.9)
     model = {
         'device'    : device,
         'gpu_imcap' : args['gpu_imcap'],
         'net'       : net,
-        'optim'     : torch.optim.SGD(net.parameters(), params['lr'], momentum=0.9)
+        'optim'     : optim,
+        'scheduler' : CosineAnnealingLR(optim, *util.pluck(['max_epochs', 'min_lr'], params)),
     }
     result = crosslocate.iter_trainingepoch(model, params,
             util.take(n_images, loader.iter_queries('val',   **args)),

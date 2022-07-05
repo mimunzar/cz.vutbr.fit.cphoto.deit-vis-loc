@@ -1,5 +1,6 @@
 {
-    "lr"               : 1e-4,
+    "lr"               : 1e-3,
+    "min_lr"           : 1e-5,
     "batch_size"       : 2,
     "margin"           : 0.1,
     "max_epochs"       : 100,
