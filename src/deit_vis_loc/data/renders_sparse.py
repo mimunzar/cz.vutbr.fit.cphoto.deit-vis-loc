@@ -4,7 +4,6 @@ import collections as cl
 import functools as ft
 import os
 import pickle
-from PIL import Image
 
 import src.deit_vis_loc.data.csv as csv
 import src.deit_vis_loc.libs.image as image
@@ -46,9 +45,11 @@ def save_im_metadata(meta_f, meta):
 
 
 def save_transformed_im(fn_transform_im, modality, in_dir, out_dir, meta):
-    im_name = meta["name"]
-    with Image.open(os.path.join(in_dir, f'{im_name}_{modality}.png')) as im:
-        fn_transform_im(im).save(os.path.join(out_dir, f'{im_name}.jpg'))
+    im_name  = meta["name"]
+    im_ext   = 'exr' if 'depth' == modality else 'png'
+    in_path  = os.path.join(in_dir,  f'{im_name}_{modality}.{im_ext}')
+    out_path = os.path.join(out_dir, f'{im_name}.{im_ext}')
+    image.write(out_path, fn_transform_im(image.read(in_path)))
     return meta
 
 

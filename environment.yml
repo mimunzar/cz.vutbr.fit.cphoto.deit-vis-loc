@@ -1,14 +1,18 @@
-name: cz.vutbr.fit.cphoto.deit-vis-loc
+name: test
 channels:
   - pytorch
   - defaults
+  - conda-forge
 dependencies:
-  - cudatoolkit=11.0
+  - cudatoolkit=11.3
   - matplotlib
+  - openexr
+  - openexr-python
   - pip
-  - python=3.6
-  - pytorch==1.7.1
-  - torchvision==0.8.2
+  - pytest
+  - python=3.10
+  - pytorch=1.12
+  - torchvision=0.13
   - pip:
-    - timm==0.3.2
+    - timm
 

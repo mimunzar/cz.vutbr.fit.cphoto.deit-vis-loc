@@ -130,7 +130,7 @@ def iter_desc(model, im_it):
     net, device = util.pluck(['net', 'device'], model)
     stack       = util.compose(torch.stack, tuple)
     iter_tensor = ft.partial(map, util.compose(
-        image.open_as_tensor, ft.partial(util.pluck, ['path'])))
+        image.read, ft.partial(util.pluck, ['path'])))
     def iter_batch_desc(im_it):
         return net(stack(iter_tensor(im_it)).to(device))
     return util.flatten(map(iter_batch_desc,
@@ -147,7 +147,7 @@ def epoch_feed(fn_iter_desc, model, params, vim_it, tim_it, rd_it):
     rec_trp = ft.partial(recalls_imtriplets, params, fn_iter_desc)
     model['net'].eval()
     with torch.no_grad():
-        mem_iter_desc = make_mem_iter_desc(fn_iter_desc, rd_it)
+        mem_iter_desc          = make_mem_iter_desc(fn_iter_desc, rd_it)
         TRN_RECALL, trn_trp_it = rec_trp(mem_iter_desc, rd_it, tim_it)
         VAL_RECALL, val_trp_it = rec_trp(mem_iter_desc, rd_it, vim_it)
         print_recall(TRN_RECALL, VAL_RECALL)
@@ -237,7 +237,7 @@ def train_one_epoch(fn_iter_desc, model, params, epoch, im_triplets_it):
             ft.partial(backward, model['optim']), params, im_triplets_it)
     model['net'].train()
     with torch.enable_grad():
-        return ft.reduce(epochstat, imloss_it, {'recall': VAL_RECALL})
+        return ft.reduce(epochstat, imloss_it, {'recall': TRN_RECALL})
 
 
 def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):

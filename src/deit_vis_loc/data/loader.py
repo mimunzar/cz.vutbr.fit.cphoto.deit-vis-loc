@@ -21,8 +21,10 @@ META_NAMES = {
     'TEST'  : 'test.bin',
 }
 
-def assign_im_dir(im_dir, meta):
-    return util.assoc(meta, ('path', os.path.join(im_dir, f'{meta["name"]}.jpg')))
+def assign_im_dir(im_dir, extension, meta):
+    im_name = meta['name']
+    return util.assoc(meta,
+            ('path', os.path.join(im_dir, f'{im_name}.{extension}')))
     #^ We don't store an image path in image  metadata,  because  there  can  be
     # multiple versions of one image (e.g.  image stored in multiple input_sizes
     # for different models).
@@ -34,7 +36,7 @@ def iter_queries(member, data_dir, input_size, scale_by_fov, **_):
             'data_fov' if scale_by_fov else 'data', str(input_size))
     if not os.path.exists(query_im_dir):
         raise FileNotFoundError(f'Image directory doesnt exists {query_im_dir}')
-    return map(ft.partial(assign_im_dir, query_im_dir),
+    return map(ft.partial(assign_im_dir, query_im_dir, 'jpg'),
             iter_metafile(query_dir, META_NAMES[member.upper()]))
     #^
     #       queries
@@ -47,6 +49,11 @@ def iter_queries(member, data_dir, input_size, scale_by_fov, **_):
     #       └── val.bin
 
 
+RENDER_EXTENSION = {
+    'segments'    : 'png',
+    'silhouettes' : 'png',
+    'depth'       : 'exr',
+}
 
 def iter_renders_pretraining(data_dir, input_size, modality, scale_by_fov, **_):
     data_dir      = os.path.expanduser(data_dir)
@@ -55,7 +62,7 @@ def iter_renders_pretraining(data_dir, input_size, modality, scale_by_fov, **_):
             modality, 'data_fov' if scale_by_fov else 'data', str(input_size))
     if not os.path.exists(render_im_dir):
         raise FileNotFoundError(f'Image directory doesnt exists {render_im_dir}')
-    return map(ft.partial(assign_im_dir, render_im_dir),
+    return map(ft.partial(assign_im_dir, render_im_dir, RENDER_EXTENSION[modality]),
             iter_metafile(render_dir, 'meta.bin'))
     #^
     #        renders/pretraining
@@ -73,7 +80,7 @@ def iter_renders_sparse(data_dir, input_size, modality, **_):
     render_im_dir = os.path.join(render_dir, modality, str(input_size))
     if not os.path.exists(render_im_dir):
         raise FileNotFoundError(f'Image directory doesnt exists {render_im_dir}')
-    return map(ft.partial(assign_im_dir, render_im_dir),
+    return map(ft.partial(assign_im_dir, render_im_dir, RENDER_EXTENSION[modality]),
             iter_metafile(render_dir, 'meta.bin'))
     #^
     #       renders/sparse

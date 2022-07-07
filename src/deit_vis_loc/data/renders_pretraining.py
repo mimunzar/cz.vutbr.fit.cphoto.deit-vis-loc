@@ -4,7 +4,6 @@ import collections as cl
 import functools as ft
 import os
 import pickle
-from PIL import Image
 
 import src.deit_vis_loc.libs.image as image
 import src.deit_vis_loc.libs.log as log
@@ -44,10 +43,12 @@ def save_im_metadata(meta_file, meta):
     return meta
 
 
-def save_transformed_im(fn_transform_im, in_dir, out_dir, meta):
-    im_name = meta["name"]
-    with Image.open(os.path.join(in_dir, f'{im_name}.png')) as im:
-        fn_transform_im(im, meta).save(os.path.join(out_dir, f'{im_name}.jpg'))
+def save_transformed_im(fn_transform_im, modality, in_dir, out_dir, meta):
+    im_name  = meta["name"]
+    im_ext   = 'exr' if 'depth' == modality else 'png'
+    in_path  = os.path.join(in_dir,  f'{im_name}.{im_ext}')
+    out_path = os.path.join(out_dir, f'{im_name}.{im_ext}')
+    image.write(out_path, fn_transform_im(meta, image.read(in_path)))
     return meta
 
 
@@ -58,16 +59,15 @@ def print_progress(total, data):
 
 
 def make_im_transform(input_size, scale_by_fov):
-    transform_fov = util.compose(
-        ft.partial(image.pad_to_square, input_size),
-        ft.partial(image.center_crop,   input_size),
-        ft.partial(image.scale_by_fov,  input_size))
-    def im_transform_fov(im, meta):
-        return transform_fov(meta['fov'], im)
-    im_transform = util.compose(
-        ft.partial(image.pad_to_square, input_size),
-        ft.partial(image.scale_to_fit,  input_size),
-        lambda im, _: im)
+    def im_transform(_, im):
+        return util.compose(
+            ft.partial(image.pad_to_square, input_size),
+            ft.partial(image.scale_to_fit,  input_size))(im)
+    def im_transform_fov(meta, im):
+        return util.compose(
+            ft.partial(image.pad_to_square, input_size),
+            ft.partial(image.center_crop,   input_size),
+            ft.partial(image.scale_by_fov,  input_size, meta['fov']))(im)
     return im_transform_fov if scale_by_fov else im_transform
 
 
@@ -100,7 +100,7 @@ def write_dataset(sparse_dir,
         util.dorun(
             map(prog_printer, enumerate(
                 map(ft.partial(save_im_metadata, meta_f),
-                    map(ft.partial(save_transformed_im, im_transform, data_dir, im_dir),
+                    map(ft.partial(save_transformed_im, im_transform, modality, data_dir, im_dir),
                         rd_it)), 1)))
         pickle.dump('EOF', meta_f)
 

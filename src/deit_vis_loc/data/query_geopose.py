@@ -4,7 +4,6 @@ import collections as cl
 import functools as ft
 import os
 import pickle
-from PIL import Image, ImageOps
 
 import src.deit_vis_loc.libs.image as image
 import src.deit_vis_loc.libs.log as log
@@ -55,13 +54,21 @@ def parse_metafile(geo_im_dir):
         raise ValueError(f'Failed to parse {info_path} ({ex})')
 
 
+WRONG_EXIFS = {'flickr_sge_3116199276_e23b30b95e_3268_31934892@N06'}
+#^ These images from GeoPose dataset when rotated according to their Exif tag
+# ends up being with a wrong orientation with respect to its render. Don't
+# apply rotation operation to these images.
+
 def save_transformed_im(fn_transform_im, out_dir, geo_im_dir):
     meta    = parse_metafile(geo_im_dir)
+    im_name = meta['name']
     im_path = os.path.join(geo_im_dir, 'photo.jpeg')
     if not os.path.exists(im_path):
         im_path = os.path.join(geo_im_dir, 'photo.jpg')
-    with Image.open(im_path) as im:
-        fn_transform_im(im, meta).save(os.path.join(out_dir, f'{meta["name"]}.jpg'))
+    util.compose(
+        ft.partial(image.write, os.path.join(out_dir, f'{im_name}.jpg')),
+        ft.partial(fn_transform_im, meta),
+        image.read if im_name in WRONG_EXIFS else image.read_exif_transpose)(im_path)
     return meta
 
 
@@ -72,22 +79,15 @@ def print_progress(total, data):
 
 
 def make_im_transform(input_size, scale_by_fov):
-    wrong_exif_it = {'flickr_sge_3116199276_e23b30b95e_3268_31934892@N06'}
-    #^ These images when rotated according to their Exif tag ends up being  with
-    # a wrong orientation.  Don't apply  rotation  operation  to  these  images.
-    def adjust_orientation(im, im_name):
-        return im if im_name in wrong_exif_it else ImageOps.exif_transpose(im)
-    def im_transform_fov(im, meta):
+    def im_transform_fov(meta, im):
         return util.compose(
             ft.partial(image.pad_to_square, input_size),
             ft.partial(image.center_crop,   input_size),
-            ft.partial(image.scale_by_fov,  input_size, meta['FOV']),
-            adjust_orientation)(im, meta['name'])
-    def im_transform(im, meta):
+            ft.partial(image.scale_by_fov,  input_size, meta['FOV']))(im)
+    def im_transform(_, im):
         return util.compose(
             ft.partial(image.pad_to_square, input_size),
-            ft.partial(image.scale_to_fit,  input_size),
-            adjust_orientation)(im, meta['name'])
+            ft.partial(image.scale_to_fit,  input_size))(im)
     return im_transform_fov if scale_by_fov else im_transform
 
 

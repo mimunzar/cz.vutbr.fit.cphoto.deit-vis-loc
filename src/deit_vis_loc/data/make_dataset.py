@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-import src.deit_vis_loc.data.im_geopose as im_geopose
+import src.deit_vis_loc.data.query_geopose as query_geopose
 import src.deit_vis_loc.data.renders_pretraining as renders_pretraining
 import src.deit_vis_loc.data.renders_sparse as renders_sparse
 import src.deit_vis_loc.libs.log as log
@@ -37,12 +37,12 @@ def parse_args(args_it):
 
 if '__main__' == __name__:
     args             = parse_args(sys.argv[1:])
-    exists, data_dir = im_geopose.dataset_exists(**args)
+    exists, data_dir = query_geopose.dataset_exists(**args)
     if exists:
         print(log.msg(f'Found im data at {data_dir}'))
     else:
         print(log.msg(f'Creating im data at {data_dir}\n'))
-        im_geopose.write_dataset(**args)
+        query_geopose.write_dataset(**args)
         print()
 
     dataset          = args['dataset']
