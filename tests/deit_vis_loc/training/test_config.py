@@ -7,6 +7,7 @@ import src.deit_vis_loc.training.config as config
 def test_parse():
     params = {
         'lr'               : 1e-3,
+        'min_lr'           : 1e-5,
         'batch_size'       : 5,
         'margin'           : 0.1,
         'max_epochs'       : 100,

@@ -2,15 +2,15 @@
 
 import pytest
 
-import src.deit_vis_loc.data.renders_geopose_panoramas as renders_geopose_panoramas
+import src.deit_vis_loc.data.renders_sparse as render_sparse
 
 
 def test_parse_line():
     with pytest.raises(Exception):
-        renders_geopose_panoramas.parse_line([])
+        render_sparse.parse_line([])
     with pytest.raises(Exception):
-        renders_geopose_panoramas.parse_line(['bar', 'baz'])
-    assert renders_geopose_panoramas.parse_line([
+        render_sparse.parse_line(['bar', 'baz'])
+    assert render_sparse.parse_line([
         'segment',
         'query',
         '46.2173',

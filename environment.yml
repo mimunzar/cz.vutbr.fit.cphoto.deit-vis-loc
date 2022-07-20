@@ -1,4 +1,4 @@
-name: test
+name: cz.vutbr.fit.cphoto.deit-vis-loc
 channels:
   - pytorch
   - defaults
