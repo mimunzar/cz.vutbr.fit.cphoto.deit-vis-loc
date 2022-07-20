@@ -256,9 +256,10 @@ def iter_trainingepoch(model, params, vim_it, tim_it, rd_it):
 
 def train(model, params, output_dir, vim_it, tim_it, rd_it):
     on_epoch = util.juxt(
-        callbacks.make_netsaver(output_dir, model['net']),
-        callbacks.make_loss_plotter(output_dir),
-        callbacks.make_recall_plotter(output_dir, params['mine_every_epoch']))
+        callbacks.make_saver_stats(output_dir),
+        callbacks.make_saver_net(output_dir, model['net']),
+        callbacks.make_plotter_loss(output_dir),
+        callbacks.make_plotter_recall(output_dir, params['mine_every_epoch']))
     util.dorun(
         util.take(params['max_epochs'],
             map(on_epoch, iter_trainingepoch(model, params, vim_it, tim_it, rd_it))))
