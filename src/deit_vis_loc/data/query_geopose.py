@@ -111,7 +111,7 @@ def data_suffix(input_size, scale_by_fov):
 def dataset_exists(output_dir, input_size, scale_by_fov, **_):
     output_dir = os.path.expanduser(output_dir)
     data_dir   = os.path.join(output_dir, 'queries', data_suffix(input_size, scale_by_fov))
-    return (os.path.exists(data_dir), data_dir)
+    return (os.path.exists(data_dir), os.path.normpath(data_dir))
 
 
 def write_dataset(geopose_dir,

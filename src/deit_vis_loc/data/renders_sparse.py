@@ -68,7 +68,7 @@ def make_im_transform(input_size):
 def dataset_exists(output_dir, modality, input_size, **_):
     meta_dir = os.path.join(os.path.expanduser(output_dir), 'renders', 'sparse')
     im_dir   = os.path.join(meta_dir, modality, str(input_size))
-    return (os.path.exists(im_dir), im_dir)
+    return (os.path.exists(im_dir), os.path.normpath(im_dir))
 
 
 def write_dataset(sparse_dir, output_dir, modality, input_size, n_images, **_):

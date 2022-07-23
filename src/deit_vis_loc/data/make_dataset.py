@@ -14,6 +14,26 @@ RENDER_MODULES = {
     'sparse'      : renders_sparse,
 }
 
+def write_renders(args):
+    dataset          = args['dataset']
+    exists, data_dir = RENDER_MODULES[dataset].dataset_exists(**args)
+    if exists:
+        print(log.msg(f'Found {dataset} renders at {data_dir}'))
+    else:
+        print(log.msg(f'Creating {dataset} renders at {data_dir}\n'))
+        RENDER_MODULES[dataset].write_dataset(**args)
+
+
+def write_queries(args):
+    exists, data_dir = query_geopose.dataset_exists(**args)
+    if exists:
+        print(log.msg(f'Found im data at {data_dir}'))
+    else:
+        print(log.msg(f'Creating im data at {data_dir}\n'))
+        query_geopose.write_dataset(**args)
+        print()
+
+
 def parse_args(args_it):
     parser = argparse.ArgumentParser()
     parser.add_argument('--geopose-dir',help='The path to Geopose dataset',
@@ -36,20 +56,8 @@ def parse_args(args_it):
 
 
 if '__main__' == __name__:
-    args             = parse_args(sys.argv[1:])
-    exists, data_dir = query_geopose.dataset_exists(**args)
-    if exists:
-        print(log.msg(f'Found im data at {data_dir}'))
-    else:
-        print(log.msg(f'Creating im data at {data_dir}\n'))
-        query_geopose.write_dataset(**args)
-        print()
-
-    dataset          = args['dataset']
-    exists, data_dir = RENDER_MODULES[dataset].dataset_exists(**args)
-    if exists:
-        print(log.msg(f'Found {dataset} renders at {data_dir}'))
-    else:
-        print(log.msg(f'Creating {dataset} renders at {data_dir}\n'))
-        RENDER_MODULES[dataset].write_dataset(**args)
+    args = parse_args(sys.argv[1:])
+    write_queries(args)
+    write_renders(args)
+    sys.exit(0)
 

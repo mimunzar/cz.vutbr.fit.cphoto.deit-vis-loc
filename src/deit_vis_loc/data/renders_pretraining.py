@@ -79,7 +79,7 @@ def data_suffix(modality, scale_by_fov, input_size):
 def dataset_exists(output_dir, modality, input_size, scale_by_fov, **_):
     data_dir = os.path.join(os.path.expanduser(output_dir),
             'renders', 'pretraining', data_suffix(modality, scale_by_fov, input_size))
-    return (os.path.exists(data_dir), data_dir)
+    return (os.path.exists(data_dir), os.path.normpath(data_dir))
 
 
 def write_dataset(sparse_dir,

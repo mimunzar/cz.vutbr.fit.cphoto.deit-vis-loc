@@ -25,10 +25,8 @@ def start(out_dir, net, args, params):
     print(log.msg(f'Copying params to {out_dir}'))
     with open(os.path.join(out_dir, 'params.json'), 'w') as f:
         json.dump(params, f, indent=4)
-
     def device_name(device, **_):
         return torch.cuda.get_device_name(device) if 'cuda' == device else 'CPU'
-
     def build_model(net, max_epochs, lr, min_lr, device, gpu_imcap, **_):
         net.to(device)
         optim = SGD(net.parameters(), lr, momentum=0.9)
@@ -39,7 +37,6 @@ def start(out_dir, net, args, params):
             'optim'     : optim,
             'scheduler' : CosineAnnealingLR(optim, max_epochs, min_lr),
         }
-
     def load_data(n_images, dataset, **_):
         render_loaders = {
             'pretraining' : loader.iter_renders_pretraining,
@@ -49,7 +46,6 @@ def start(out_dir, net, args, params):
             util.take(n_images, loader.iter_queries('val',   **args)),
             util.take(n_images, loader.iter_queries('train', **args)),
             render_loaders[dataset](**args))
-
     print(log.msg(
         f'Starting training process "{os.getpid()}" on "{device_name(**args)}"\n'))
     crosslocate.train(build_model(net, **args, **params), params, out_dir, *load_data(**args))

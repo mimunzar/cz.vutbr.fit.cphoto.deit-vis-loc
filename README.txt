@@ -1,5 +1,5 @@
-Visual Localization using DeiT Transformer
-==========================================
+Visual Localization With Transformers
+=====================================
 
 ** The tool is still a work in progress **
 
@@ -18,66 +18,37 @@ command:
     conda env create -f environment.yml
 
 
-Usage for Model Training [TODO]
--------------------------------
+Build Dataset
+-------------
 
-First download the GeoPose3K  dataset  [TODO].   The  dataset  should  have  the
-following structure:
-
-    .
-    ├── database_segments
-    │   └── datasetInfoClean.csv
-    └── query_original_result
-        ├── test.txt
-        ├── train.txt
-        └── val.txt
+    python -um src.deit_vis_loc.data.make_dataset \
+        --geopose-dir ${DATA_GEOPOSE} \
+        --sparse-dir  ${DATA_SPARSE} \
+        --output-dir  data/ \
+        --dataset     pretraining \
+        --modality    silhouettes \
+        --input-size  224
 
 
-Next specify model parameters in a JSON file. The parameters must have following
-items:
+Train Model
+-----------
 
-    {
-        "deit_model"        : "deit_tiny_patch16_224",
-        "input_size"        : 224,
-        "max_epochs"        : 10,
-        "batch_size"        : 64,
-        "margin"            : 0.2,
-        "learning_rate"     : 0.0001,
-        "stopping_patience" : 5,
-        "yaw_tol_deg" : 15
-    }
-
-
-Then start trainining by executing the following command:
-
-    python -m src.deit_vis_loc.train_model \
-        --dataset-dir  <DIR>  \
-        --params       <FILE> \
-        --output-dir   <DIR>
+  python -um src.deit_vis_loc.train_model \
+        --data-dir     data/ \
+        --dataset      pretraining \
+        --modality     silhouettes \
+        --input-size   224 \
+        --params       params/pretraining.json \
+        --model-name   deit_tiny_patch16_224 \
+        --device       cuda \
+        --gpu-imcap    300 \
+        --output-dir   output/ \
 
 
-Usage for Model Evaluation [TODO]
----------------------------------
-
-    python -m src.deit_vis_loc.eval_model \
-        --segments_dataset  <PATH> \
-        --queries_meta      <PATH> \
-        --model             <PATH> \
-        --yaw_tol_deg <INT>  \
-        --input_size        <INT>
-
-
-Tests
------
+Run Tests
+---------
 
   python -m pytest
-
-
-Possible Improvements [TODO]
-----------------------------
-
-    - Support other transformer models
-    - Support different loss functions
 
 
 References
